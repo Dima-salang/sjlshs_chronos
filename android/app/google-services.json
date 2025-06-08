@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "72329656535",
+    "project_id": "sjlshs-chronos",
+    "storage_bucket": "sjlshs-chronos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:72329656535:android:ca07593211efbfde2fd892",
+        "android_client_info": {
+          "package_name": "com.example.sjlshs_chronos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJF2pjR2U06g7dU--Np_56WALMlOSliSY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:72329656535:android:20423ad144a8e05d2fd892",
+        "android_client_info": {
+          "package_name": "com.sjlshs.chronos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJF2pjR2U06g7dU--Np_56WALMlOSliSY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

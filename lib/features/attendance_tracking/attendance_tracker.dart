@@ -15,20 +15,24 @@ enum ScanState {
 }
 
 class AttendanceRecord {
-  final String studentID;
-  final String studentName;
+  final String lrn;
+  final String firstName;
+  final String lastName;
   final String studentYear;
   final String studentSection;
   final DateTime timestamp;
   final bool isPresent;
+  final bool isLate;
 
   AttendanceRecord({
-    required this.studentID,
-    required this.studentName,
+    required this.lrn,
+    required this.firstName,
+    required this.lastName,
     required this.studentYear,
     required this.studentSection,
     required this.timestamp,
     required this.isPresent,
+    required this.isLate,
   });
 }
 
@@ -180,26 +184,31 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
 
       
       final record = AttendanceRecord(
-        studentID: scannedDataMap['student_id'] ?? '',
-        studentName: scannedDataMap['student_name'] ?? 'Unknown',
+        lrn: scannedDataMap['student_id'] ?? '',
+        firstName: scannedDataMap['student_name'] ?? 'Unknown',
+        lastName: scannedDataMap['student_name'] ?? 'Unknown',
         studentYear: scannedDataMap['year'] ?? '',
         studentSection: scannedDataMap['section'] ?? '',
         timestamp: timestamp,
         isPresent: true,
+        isLate: false,
       );
 
       // Save to Firestore
       await _firestore.collection('attendance').add({
-        'student_id': record.studentID,
-        'student_name': record.studentName,
-        'year': record.studentYear,
-        'section': record.studentSection,
+        'lrn': record.lrn,
+        'firstName': record.firstName,
+        'lastName': record.lastName,
+        'studentYear': record.studentYear,
+        'studentSection': record.studentSection,
         'timestamp': timestamp,
+        'isPresent': record.isPresent,
+        'isLate': record.isLate,
       });
 
       setState(() {
         _scanState = ScanState.success;
-        _lastScannedId = record.studentID;
+        _lastScannedId = record.lrn;
         _lastScanTime = timestamp;
         _recentScans.insert(0, record);
         if (_recentScans.length > 5) {

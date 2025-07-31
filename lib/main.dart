@@ -124,8 +124,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                       itemBuilder: (context, index) {
                         final record = _recentScans[index];
                         return ListTile(
-                          title: Text(record.studentName),
-                          subtitle: Text('ID: ${record.studentID}'),
+                          title: Text(record.firstName + ' ' + record.lastName),
+                          subtitle: Text('LRN: ${record.lrn}'),
                           trailing: Text(
                             '${record.timestamp.hour}:${record.timestamp.minute.toString().padLeft(2, '0')}',
                           ),

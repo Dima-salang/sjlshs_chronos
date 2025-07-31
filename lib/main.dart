@@ -1,30 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'features/attendance_tracking/attendance_tracker.dart';
+import 'utils/encryption_utils.dart';
+
 void main() async {
-  // Ensure that Flutter binding is initialized before using platform channels.
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SJLSHS Chronos',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF6366F1),
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        fontFamily: 'SF Pro Display',
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF6366F1),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        fontFamily: 'SF Pro Display',
       ),
       home: const QRScannerScreen(),
     );
@@ -35,69 +44,99 @@ class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({Key? key}) : super(key: key);
 
   @override
-  _QRScannerScreenState createState() => _QRScannerScreenState();
+  State<QRScannerScreen> createState() => _QRScannerScreenState();
 }
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  String _scanStatus = 'Scanning...';
-  String _scannedValue = '';
-  Timestamp? _timestamp;
-
-  late MobileScannerController _controller;
-
+  final List<AttendanceRecord> _recentScans = [];
+  late Future<String> _encryptionKeyFuture;
+  
   @override
   void initState() {
     super.initState();
-    _controller = MobileScannerController(
-      detectionTimeoutMs: 2000,
-      formats: [BarcodeFormat.qrCode]
-    );
+    _encryptionKeyFuture = EncryptionUtils.loadEncryptionKeyAsString();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void _handleScanSuccess(AttendanceRecord record) {
+    setState(() {
+      _recentScans.insert(0, record);
+      if (_recentScans.length > 5) {
+        _recentScans.removeLast();
+      }
+    });
+  }
+
+  void _handleError(String error) {
+    debugPrint('QR Scan Error: $error');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan QR Code'),
+        title: const Text('QR Code Scanner'),
+        centerTitle: true,
       ),
-      body: MobileScanner(
-        controller: _controller,
-        onDetect: (barcode) {
-          final String? scannedData = barcode.barcodes.first.rawValue;
-          if (scannedData != null) {
-            _timestamp = Timestamp.now();
-            // Save data to Firestore
-            _firestore.collection('attendance').add({
-              'studentId': scannedData,
-              'timestamp': _timestamp,
-            }).then((_) {
-              setState(() {
-                _scanStatus = 'Scan successful!';
-                _scannedValue = scannedData; // Update scanned value
-              });
-            }).catchError((error) {
-              setState(() {
-                _scanStatus = 'Error saving data: $error';
-                _scannedValue = ''; // Clear scanned value on error
-              });
-              debugPrint('Error adding document: $error');
-            });
-          }
-        },
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          'Scanned Value: $_scannedValue $_timestamp',
-          textAlign: TextAlign.center,
-        ),
+      body: Column(
+        children: [
+          Expanded(
+            child: FutureBuilder<String>(
+              future: _encryptionKeyFuture,
+              builder: (context, snapshot) {
+                print(snapshot.data);
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Error loading encryption key: ${snapshot.error}'));
+                } else {
+                  return QRScanner(
+                    encryptionKey: snapshot.data!,
+                    onScanSuccess: _handleScanSuccess,
+                    onError: _handleError,
+                  );
+                }
+              },
+            ),
+          ),
+          if (_recentScans.isNotEmpty)
+            Container(
+              height: 200,
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Recent Scans:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _recentScans.length,
+                      itemBuilder: (context, index) {
+                        final record = _recentScans[index];
+                        return ListTile(
+                          title: Text(record.studentName),
+                          subtitle: Text('ID: ${record.studentID}'),
+                          trailing: Text(
+                            '${record.timestamp.hour}:${record.timestamp.minute.toString().padLeft(2, '0')}',
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

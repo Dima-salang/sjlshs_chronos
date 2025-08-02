@@ -8,6 +8,9 @@ import 'package:sjlshs_chronos/utils/encryption_utils.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum ScanState {
   scanning,
@@ -60,6 +63,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
   late AnimationController _successAnimationController;
   late Animation<double> _scanAnimation;
   late Animation<double> _successAnimation;
+  late RecordManager recordManager;
 
   ScanState _scanState = ScanState.scanning;
   String _scannedValue = '';
@@ -74,6 +78,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
     _initializeController();
     _initializeAnimations();
     _requestPermissions();
+    recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: widget.isar);
   }
 
   void _initializeController() {
@@ -179,6 +184,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       final timestamp = DateTime.now();
       // decrypt scanned data asynchronously
       final scannedDataMap = await _decryptData(scannedData);
+      print(scannedDataMap);
 
       final lrn = scannedDataMap['student_id'];
 
@@ -204,9 +210,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
         isPresent: true,
       );
 
-      await widget.isar.writeTxn(() async {
-        await widget.isar.attendanceRecords.put(record);
-      });
+      await recordManager.addRecordToIsar(record);
 
       // Add to recent scans
       setState(() {
@@ -229,6 +233,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       debugPrint('Error processing QR code: $e');
       setState(() {
         _scanState = ScanState.error;
+        _errorMessage = 'Error processing QR code: $e';
       });
       // Show error feedback
       HapticFeedback.heavyImpact();
@@ -286,7 +291,16 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return VisibilityDetector(
+      key: const Key('qr_scanner'),
+      onVisibilityChanged: (info) {
+        if (info.visibleFraction < 0.5) {
+          _controller.stop();
+        } else {
+          _controller.start();
+        }
+      },
+      child: Stack(
       children: [
         MobileScanner(
           controller: _controller,
@@ -307,7 +321,23 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
               ),
             ),
           ),
+        if (_scanState == ScanState.error)
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error, color: Colors.red, size: 80),
+                const SizedBox(height: 10),
+                Text(
+                  _errorMessage,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                ),
+              ],
+            ),
+          ),
       ],
-    );
+    ),
+  );
   }
 }

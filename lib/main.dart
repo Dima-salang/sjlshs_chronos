@@ -5,6 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
 import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
+import 'package:sjlshs_chronos/features/student_management/models/students.dart';
+import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'package:isar/isar.dart';
@@ -27,7 +29,7 @@ void main() async {
 
   // Initialize Isar
   final isar = await Isar.open(
-    [AttendanceRecordSchema],
+    [AttendanceRecordSchema, StudentSchema],
     directory: await getApplicationDocumentsDirectory().then((dir) => dir.path),
   );
 
@@ -115,12 +117,15 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   }
 
   @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('QR Code Scanner'),
-        centerTitle: true,
-      ),
+    return AppScaffold(
+      title: 'QR Scanner',
+      
       body: Column(
         children: [
           Expanded(

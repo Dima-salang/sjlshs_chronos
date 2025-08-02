@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
 import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'firebase_options.dart';
-import 'features/attendance_tracking/attendance_tracker.dart';
+import 'router/app_router.dart';
 import 'package:isar/isar.dart';
 import 'utils/encryption_utils.dart';
 
@@ -21,15 +24,33 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+
+  // Initialize Isar
+  final isar = await Isar.open(
+    [AttendanceRecordSchema],
+    directory: await getApplicationDocumentsDirectory().then((dir) => dir.path),
+  );
+
+  runApp(MyApp(isar: isar));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Isar isar;
+  
+  const MyApp({
+    super.key, 
+    required this.isar,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // Create router with dependencies
+    final router = AppRouter(
+      isar: isar,
+      firestore: FirebaseFirestore.instance,
+    );
+
+    return MaterialApp.router(
       title: 'SJLSHS Chronos',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -47,7 +68,8 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'SF Pro Display',
       ),
-      home: const QRScannerScreen(),
+      routerConfig: router.router,
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -112,7 +134,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   return Center(child: Text('Error loading encryption key: ${snapshot.error}'));
                 } else {
                   return QRScanner(
-                    encryptionKey: snapshot.data!,
                     onScanSuccess: _handleScanSuccess,
                     onError: _handleError,
                     isar: _isar!,

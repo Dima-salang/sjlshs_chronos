@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:pointycastle/export.dart' as pointycastle;
+import 'package:sjlshs_chronos/utils/encryption_utils.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
@@ -39,14 +39,12 @@ class AttendanceRecordIsar {
 }
 
 class QRScanner extends StatefulWidget {
-  final String encryptionKey;
   final Function(AttendanceRecord)? onScanSuccess;
   final Function(String)? onError;
   final Isar isar;
-
+  
   const QRScanner({
     Key? key,
-    required this.encryptionKey,
     this.onScanSuccess,
     this.onError,
     required this.isar,
@@ -66,6 +64,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
   ScanState _scanState = ScanState.scanning;
   String _scannedValue = '';
   String _lastScannedId = '';
+  String _errorMessage = '';
   DateTime? _lastScanTime;
   List<AttendanceRecord> _recentScans = [];
 
@@ -178,72 +177,73 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
 
     try {
       final timestamp = DateTime.now();
-      // decrypt scanned data
-      final Map<String, dynamic> scannedDataMap = _decryptData(scannedData);
+      // decrypt scanned data asynchronously
+      final scannedDataMap = await _decryptData(scannedData);
 
       final lrn = scannedDataMap['student_id'];
 
       // get student from isar
       final student = await widget.isar.students.filter().lrnEqualTo(lrn).findFirst();
-
       
-
+      if (student == null) {
+        setState(() {
+          _scanState = ScanState.error;
+          _errorMessage = 'Student with LRN $lrn not found';
+        });
+        return;
+      }
       
+      // create new record
       final record = AttendanceRecord(
-        lrn: student?.lrn ?? '',
-        firstName: student?.firstName ?? 'Unknown',
-        lastName: student?.lastName ?? 'Unknown',
-        studentYear: student?.studentYear ?? '',
-        studentSection: student?.studentSection ?? '',
+        lrn: lrn,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        studentYear: student.studentYear,
+        studentSection: student.studentSection,
         timestamp: timestamp,
         isPresent: true,
-        isLate: false,
       );
 
+      await widget.isar.writeTxn(() async {
+        await widget.isar.attendanceRecords.put(record);
+      });
 
+      // Add to recent scans
       setState(() {
-        _scanState = ScanState.success;
-        _lastScannedId = record.lrn;
-        _lastScanTime = timestamp;
         _recentScans.insert(0, record);
-        if (_recentScans.length > 5) {
-          _recentScans.removeLast();
-        }
+        _scanState = ScanState.success;
       });
 
-      widget.onScanSuccess?.call(record);
-      _successAnimationController.forward().then((_) {
-        _successAnimationController.reset();
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            setState(() {
-              _scanState = ScanState.scanning;
-            });
-          }
+      // Show success feedback
+      _successAnimationController.reset();
+      _successAnimationController.forward();
+
+      // Reset after delay
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() {
+          _scanState = ScanState.scanning;
         });
-      });
+      }
     } catch (e) {
+      debugPrint('Error processing QR code: $e');
       setState(() {
         _scanState = ScanState.error;
       });
-      widget.onError?.call('Error processing QR code: $e');
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() {
-            _scanState = ScanState.scanning;
-          });
-        }
-      });
+      // Show error feedback
+      HapticFeedback.heavyImpact();
+      // Reset after delay
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() {
+          _scanState = ScanState.scanning;
+        });
+      }
     }
   }
 
-  Future<String> _getDeviceInfo() async {
-    // You can enhance this with more device info if needed
-    return '${Theme.of(context).platform.name} Device';
-  }
 
-
-  Map<String, dynamic> _decryptData(String encryptedData) {
+  Future<Map<String, dynamic>> _decryptData(String encryptedData) async {
     try {
       // Decode the base64 string
       final encryptedBytes = base64Decode(encryptedData);
@@ -253,20 +253,8 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       final tag = encryptedBytes.sublist(12, 28);
       final ciphertext = encryptedBytes.sublist(28);
       
-      // Convert the key from base64 to bytes if it's a base64 string
-      Uint8List key;
-      try {
-        key = base64Decode(widget.encryptionKey);
-      } catch (e) {
-        // If not base64, use it directly as bytes
-        key = Uint8List.fromList(utf8.encode(widget.encryptionKey));
-        // Pad or truncate key to 32 bytes (256 bits) if needed
-        if (key.length < 32) {
-          key = Uint8List(32)..setRange(0, key.length, key);
-        } else if (key.length > 32) {
-          key = key.sublist(0, 32);
-        }
-      }
+      // Load the encryption key
+      final key = await EncryptionUtils.loadEncryptionKey();
       
       // Create AES-GCM cipher
       final cipher = pointycastle.GCMBlockCipher(pointycastle.AESEngine())
@@ -286,8 +274,6 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       throw Exception('Decryption failed: $e');
     }
   }
-
-  // save record locally
 
 
   @override

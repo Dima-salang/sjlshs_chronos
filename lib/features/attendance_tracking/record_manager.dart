@@ -39,6 +39,7 @@ class RecordManager {
 
   }
 
+  // syncs absences to firestore based on the present records of students
   Future<void> syncAbsences() async {
     final now = DateTime.now();
     final lastSync = await getLastSyncDate() ?? now.subtract(Duration(days: 1)); // fallback
@@ -114,6 +115,9 @@ class RecordManager {
     }
   }
 
+
+
+  /* UTIL FUNCTIONS */
 
 
   /// fetches normalized days where the student was present.

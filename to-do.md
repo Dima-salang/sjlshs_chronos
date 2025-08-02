@@ -15,5 +15,14 @@ Late for admission slip
 
 
 TO-DO
-- local storage with Isar
-- new students update using excel
+- local storage with Isar - DONE
+- new students update using excel - DONE
+- sync records - DONE
+- UI for scanning
+- Auth
+- get images
+- resolve absences from last sync to current time
+- resolve presences from online for teachers
+- report generation
+- admin dashboard
+- scanning mode security

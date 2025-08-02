@@ -14,7 +14,7 @@ enum ScanState {
   error,
 }
 
-class AttendanceRecord {
+class AttendanceRecordIsar {
   final String lrn;
   final String firstName;
   final String lastName;
@@ -24,7 +24,7 @@ class AttendanceRecord {
   final bool isPresent;
   final bool isLate;
 
-  AttendanceRecord({
+  AttendanceRecordIsar({
     required this.lrn,
     required this.firstName,
     required this.lastName,
@@ -38,7 +38,7 @@ class AttendanceRecord {
 
 class QRScanner extends StatefulWidget {
   final String encryptionKey;
-  final Function(AttendanceRecord)? onScanSuccess;
+  final Function(AttendanceRecordIsar)? onScanSuccess;
   final Function(String)? onError;
 
   const QRScanner({
@@ -64,7 +64,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
   String _scannedValue = '';
   String _lastScannedId = '';
   DateTime? _lastScanTime;
-  List<AttendanceRecord> _recentScans = [];
+  List<AttendanceRecordIsar> _recentScans = [];
 
   @override
   void initState() {
@@ -183,7 +183,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       
 
       
-      final record = AttendanceRecord(
+      final record = AttendanceRecordIsar(
         lrn: scannedDataMap['student_id'] ?? '',
         firstName: scannedDataMap['student_name'] ?? 'Unknown',
         lastName: scannedDataMap['student_name'] ?? 'Unknown',

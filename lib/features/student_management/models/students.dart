@@ -5,6 +5,8 @@ part 'students.g.dart';
 @collection
 class Student {
   Id id = Isar.autoIncrement;
+
+  @Index()
   late String lrn;
   late String lastName;
   late String firstName;

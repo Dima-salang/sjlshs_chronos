@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
 import 'firebase_options.dart';
 import 'features/attendance_tracking/attendance_tracker.dart';
 import 'utils/encryption_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // read device id
+  String? deviceID = await DeviceManagement.getDeviceID();
+
+  if (deviceID == null) {
+    await DeviceManagement.setDeviceId();
+    deviceID = await DeviceManagement.getDeviceID();
+  }
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -48,7 +58,7 @@ class QRScannerScreen extends StatefulWidget {
 }
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  final List<AttendanceRecord> _recentScans = [];
+  final List<AttendanceRecordIsar> _recentScans = [];
   late Future<String> _encryptionKeyFuture;
   
   @override
@@ -57,7 +67,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     _encryptionKeyFuture = EncryptionUtils.loadEncryptionKeyAsString();
   }
 
-  void _handleScanSuccess(AttendanceRecord record) {
+  void _handleScanSuccess(AttendanceRecordIsar record) {
     setState(() {
       _recentScans.insert(0, record);
       if (_recentScans.length > 5) {

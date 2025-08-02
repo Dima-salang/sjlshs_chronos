@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
+import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'firebase_options.dart';
 import 'features/attendance_tracking/attendance_tracker.dart';
+import 'package:isar/isar.dart';
 import 'utils/encryption_utils.dart';
 
 void main() async {
@@ -58,16 +60,18 @@ class QRScannerScreen extends StatefulWidget {
 }
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  final List<AttendanceRecordIsar> _recentScans = [];
+  final List<AttendanceRecord> _recentScans = [];
   late Future<String> _encryptionKeyFuture;
+  late Isar? _isar;
   
   @override
   void initState() {
     super.initState();
     _encryptionKeyFuture = EncryptionUtils.loadEncryptionKeyAsString();
+    _isar = Isar.getInstance();
   }
 
-  void _handleScanSuccess(AttendanceRecordIsar record) {
+  void _handleScanSuccess(AttendanceRecord record) {
     setState(() {
       _recentScans.insert(0, record);
       if (_recentScans.length > 5) {
@@ -111,6 +115,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     encryptionKey: snapshot.data!,
                     onScanSuccess: _handleScanSuccess,
                     onError: _handleError,
+                    isar: _isar!,
                   );
                 }
               },

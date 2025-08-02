@@ -5,6 +5,7 @@ import 'package:excel/excel.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
+import 'package:sjlshs_chronos/features/logging/chronos_logger.dart';
 // base student class
 class StudentModel {
   String lrn;
@@ -27,6 +28,7 @@ class StudentModel {
 
 // student management strategy
 abstract class StudentManagementStrategy {
+  final logger = getLogger();
   Future<Student> addStudent(StudentModel student);
   Future<Student> removeStudent(StudentModel student);
   Future<Student> updateStudent(StudentModel student);
@@ -37,6 +39,7 @@ class StudentManagementExcelStrategy implements StudentManagementStrategy {
   // excel file path
   final String excelFilePath;
   final Isar isar;
+  final logger = getLogger();
 
   // constructor
   StudentManagementExcelStrategy(this.excelFilePath, this.isar);
@@ -67,7 +70,8 @@ class StudentManagementExcelStrategy implements StudentManagementStrategy {
 
       return newStudent;
     } catch (e) {
-      throw Exception('Error adding student: $e');
+      logger.e('Error adding student ${student.lrn}: $e');
+      throw Exception('Error adding student ${student.lrn}: $e');
     }
   }
 

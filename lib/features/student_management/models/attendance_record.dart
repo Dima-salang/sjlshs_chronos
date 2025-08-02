@@ -15,6 +15,17 @@ class AttendanceRecord {
   @Index()
   late DateTime timestamp;
   late bool isPresent;
-  late bool isLate;
+  late bool? isLate;
+
+  AttendanceRecord({
+    required this.lrn,
+    required this.firstName,
+    required this.lastName,
+    required this.studentYear,
+    required this.studentSection,
+    required this.timestamp,
+    required this.isPresent,
+    this.isLate,
+  });
   
 }

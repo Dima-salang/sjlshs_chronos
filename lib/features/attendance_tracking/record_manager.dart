@@ -4,10 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
+import 'package:sjlshs_chronos/features/logging/chronos_logger.dart';
 
 class RecordManager {
   final FirebaseFirestore firestore;
   final Isar isar;
+  final logger = getLogger();
   RecordManager({required this.firestore, required this.isar});
 
   Future<void> addRecordToIsar(AttendanceRecord record) async {
@@ -31,8 +33,10 @@ class RecordManager {
         await isar.attendanceRecords.put(record);
       });
     } catch (e) {
+      logger.e('Error adding record to Isar: $e');
       throw Exception('Error adding record to Isar: $e');
     }
+
   }
 
   Future<void> syncAbsences() async {
@@ -48,7 +52,12 @@ class RecordManager {
         start: DateTime(lastSync.year, lastSync.month, lastSync.day),
         end: DateTime(now.year, now.month, now.day),
       );
-      await writeAbsencesToFirestore(absences, student);
+      try {
+        await writeAbsencesToFirestore(absences, student);
+      } catch (e) {
+        logger.e('Error writing absences to Firestore: $e');
+        throw Exception('Error writing absences to Firestore: $e');
+      }
     }
     await setLastSyncDate(now); // ✅ Set last sync
   }
@@ -76,16 +85,32 @@ class RecordManager {
     }
   }
 
+  Future<DateTime?> getLastSyncDate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final millis = prefs.getInt('last_sync_timestamp');
+    return millis != null ? DateTime.fromMillisecondsSinceEpoch(millis) : null;
+  }
+
+  Future<void> setLastSyncDate(DateTime date) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('last_sync_timestamp', date.millisecondsSinceEpoch);
+  }
+
   // get all student records from firestore for report generation
   Future<QuerySnapshot<Map<String, dynamic>>> getStudentRecords(String reportDuration) async {
-    if (reportDuration == 'today') {
-      return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 1)), isLessThanOrEqualTo: DateTime.now()).get();
-    } else if (reportDuration == 'month') {
-      return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 30)), isLessThanOrEqualTo: DateTime.now()).get();
-    } else if (reportDuration == 'year') {
+    try {
+      if (reportDuration == 'today') {
+        return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 1)), isLessThanOrEqualTo: DateTime.now()).get();
+      } else if (reportDuration == 'month') {
+        return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 30)), isLessThanOrEqualTo: DateTime.now()).get();
+      } else if (reportDuration == 'year') {
       return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 365)), isLessThanOrEqualTo: DateTime.now()).get();
     } else {
       return await firestore.collection('attendance').get();
+    }
+    } catch (e) {
+      logger.e('Error getting student records: $e');
+      throw Exception('Error getting student records: $e');
     }
   }
 
@@ -118,11 +143,16 @@ class RecordManager {
     required DateTime start,
     required DateTime end,
   }) async {
-    final validDays = getWeekdaysBetween(start, end);
-    final presentDays =
-        await getPresentDays(lrn: lrn, start: start, end: end);
+    try {
+      final validDays = getWeekdaysBetween(start, end);
+      final presentDays =
+          await getPresentDays(lrn: lrn, start: start, end: end);
 
-    return validDays.where((day) => !presentDays.contains(day)).toList();
+      return validDays.where((day) => !presentDays.contains(day)).toList();
+    } catch (e) {
+      logger.e('Error getting absent days for $lrn: $e');
+      throw Exception('Error getting absent days for $lrn: $e');
+    }
   }
   
 
@@ -141,23 +171,4 @@ class RecordManager {
 
     return dates;
   }
-
-
-
-
-
-  Future<DateTime?> getLastSyncDate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final millis = prefs.getInt('last_sync_timestamp');
-    return millis != null ? DateTime.fromMillisecondsSinceEpoch(millis) : null;
-  }
-
-  Future<void> setLastSyncDate(DateTime date) async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_sync_timestamp', date.millisecondsSinceEpoch);
-  }
-
-
-
-  
 }

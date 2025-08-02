@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:pointycastle/export.dart' as pointycastle;
+import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
+import 'package:isar/isar.dart';
+import 'package:sjlshs_chronos/features/student_management/models/students.dart';
 
 enum ScanState {
   scanning,
@@ -38,14 +40,16 @@ class AttendanceRecordIsar {
 
 class QRScanner extends StatefulWidget {
   final String encryptionKey;
-  final Function(AttendanceRecordIsar)? onScanSuccess;
+  final Function(AttendanceRecord)? onScanSuccess;
   final Function(String)? onError;
+  final Isar isar;
 
   const QRScanner({
     Key? key,
     required this.encryptionKey,
     this.onScanSuccess,
     this.onError,
+    required this.isar,
   }) : super(key: key);
 
   @override
@@ -53,7 +57,6 @@ class QRScanner extends StatefulWidget {
 }
 
 class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late MobileScannerController _controller;
   late AnimationController _scanAnimationController;
   late AnimationController _successAnimationController;
@@ -64,7 +67,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
   String _scannedValue = '';
   String _lastScannedId = '';
   DateTime? _lastScanTime;
-  List<AttendanceRecordIsar> _recentScans = [];
+  List<AttendanceRecord> _recentScans = [];
 
   @override
   void initState() {
@@ -178,33 +181,25 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       // decrypt scanned data
       final Map<String, dynamic> scannedDataMap = _decryptData(scannedData);
 
-      final studentID = scannedDataMap['student_id'];
+      final lrn = scannedDataMap['student_id'];
+
+      // get student from isar
+      final student = await widget.isar.students.filter().lrnEqualTo(lrn).findFirst();
 
       
 
       
-      final record = AttendanceRecordIsar(
-        lrn: scannedDataMap['student_id'] ?? '',
-        firstName: scannedDataMap['student_name'] ?? 'Unknown',
-        lastName: scannedDataMap['student_name'] ?? 'Unknown',
-        studentYear: scannedDataMap['year'] ?? '',
-        studentSection: scannedDataMap['section'] ?? '',
+      final record = AttendanceRecord(
+        lrn: student?.lrn ?? '',
+        firstName: student?.firstName ?? 'Unknown',
+        lastName: student?.lastName ?? 'Unknown',
+        studentYear: student?.studentYear ?? '',
+        studentSection: student?.studentSection ?? '',
         timestamp: timestamp,
         isPresent: true,
         isLate: false,
       );
 
-      // Save to Firestore
-      await _firestore.collection('attendance').add({
-        'lrn': record.lrn,
-        'firstName': record.firstName,
-        'lastName': record.lastName,
-        'studentYear': record.studentYear,
-        'studentSection': record.studentSection,
-        'timestamp': timestamp,
-        'isPresent': record.isPresent,
-        'isLate': record.isLate,
-      });
 
       setState(() {
         _scanState = ScanState.success;

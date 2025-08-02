@@ -53,7 +53,21 @@ const StudentSchema = CollectionSchema(
   deserialize: _studentDeserialize,
   deserializeProp: _studentDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'lrn': IndexSchema(
+      id: -6381483324607427732,
+      name: r'lrn',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'lrn',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {},
   getId: _studentGetId,
@@ -144,6 +158,60 @@ void _studentAttach(IsarCollection<dynamic> col, Id id, Student object) {
   object.id = id;
 }
 
+extension StudentByIndex on IsarCollection<Student> {
+  Future<Student?> getByLrn(String lrn) {
+    return getByIndex(r'lrn', [lrn]);
+  }
+
+  Student? getByLrnSync(String lrn) {
+    return getByIndexSync(r'lrn', [lrn]);
+  }
+
+  Future<bool> deleteByLrn(String lrn) {
+    return deleteByIndex(r'lrn', [lrn]);
+  }
+
+  bool deleteByLrnSync(String lrn) {
+    return deleteByIndexSync(r'lrn', [lrn]);
+  }
+
+  Future<List<Student?>> getAllByLrn(List<String> lrnValues) {
+    final values = lrnValues.map((e) => [e]).toList();
+    return getAllByIndex(r'lrn', values);
+  }
+
+  List<Student?> getAllByLrnSync(List<String> lrnValues) {
+    final values = lrnValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'lrn', values);
+  }
+
+  Future<int> deleteAllByLrn(List<String> lrnValues) {
+    final values = lrnValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'lrn', values);
+  }
+
+  int deleteAllByLrnSync(List<String> lrnValues) {
+    final values = lrnValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'lrn', values);
+  }
+
+  Future<Id> putByLrn(Student object) {
+    return putByIndex(r'lrn', object);
+  }
+
+  Id putByLrnSync(Student object, {bool saveLinks = true}) {
+    return putByIndexSync(r'lrn', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllByLrn(List<Student> objects) {
+    return putAllByIndex(r'lrn', objects);
+  }
+
+  List<Id> putAllByLrnSync(List<Student> objects, {bool saveLinks = true}) {
+    return putAllByIndexSync(r'lrn', objects, saveLinks: saveLinks);
+  }
+}
+
 extension StudentQueryWhereSort on QueryBuilder<Student, Student, QWhere> {
   QueryBuilder<Student, Student, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
@@ -215,6 +283,49 @@ extension StudentQueryWhere on QueryBuilder<Student, Student, QWhereClause> {
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<Student, Student, QAfterWhereClause> lrnEqualTo(String lrn) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'lrn',
+        value: [lrn],
+      ));
+    });
+  }
+
+  QueryBuilder<Student, Student, QAfterWhereClause> lrnNotEqualTo(String lrn) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'lrn',
+              lower: [],
+              upper: [lrn],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'lrn',
+              lower: [lrn],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'lrn',
+              lower: [lrn],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'lrn',
+              lower: [],
+              upper: [lrn],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }

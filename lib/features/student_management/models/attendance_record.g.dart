@@ -135,16 +135,17 @@ AttendanceRecord _attendanceRecordDeserialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  final object = AttendanceRecord();
-  object.firstName = reader.readString(offsets[0]);
+  final object = AttendanceRecord(
+    firstName: reader.readString(offsets[0]),
+    isLate: reader.readBoolOrNull(offsets[1]),
+    isPresent: reader.readBool(offsets[2]),
+    lastName: reader.readString(offsets[3]),
+    lrn: reader.readString(offsets[4]),
+    studentSection: reader.readString(offsets[5]),
+    studentYear: reader.readString(offsets[6]),
+    timestamp: reader.readDateTime(offsets[7]),
+  );
   object.id = id;
-  object.isLate = reader.readBool(offsets[1]);
-  object.isPresent = reader.readBool(offsets[2]);
-  object.lastName = reader.readString(offsets[3]);
-  object.lrn = reader.readString(offsets[4]);
-  object.studentSection = reader.readString(offsets[5]);
-  object.studentYear = reader.readString(offsets[6]);
-  object.timestamp = reader.readDateTime(offsets[7]);
   return object;
 }
 
@@ -158,7 +159,7 @@ P _attendanceRecordDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readBool(offset)) as P;
+      return (reader.readBoolOrNull(offset)) as P;
     case 2:
       return (reader.readBool(offset)) as P;
     case 3:
@@ -609,7 +610,25 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      isLateEqualTo(bool value) {
+      isLateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'isLate',
+      ));
+    });
+  }
+
+  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
+      isLateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'isLate',
+      ));
+    });
+  }
+
+  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
+      isLateEqualTo(bool? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'isLate',
@@ -1550,7 +1569,7 @@ extension AttendanceRecordQueryProperty
     });
   }
 
-  QueryBuilder<AttendanceRecord, bool, QQueryOperations> isLateProperty() {
+  QueryBuilder<AttendanceRecord, bool?, QQueryOperations> isLateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isLate');
     });

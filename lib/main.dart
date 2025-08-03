@@ -11,17 +11,13 @@ import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'package:isar/isar.dart';
 import 'utils/encryption_utils.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // read device id
-  String? deviceID = await DeviceManagement.getDeviceID();
-
-  if (deviceID == null) {
-    await DeviceManagement.setDeviceId();
-    deviceID = await DeviceManagement.getDeviceID();
-  }
+  await DeviceManagement.getOrCreateDeviceId();
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -33,7 +29,11 @@ void main() async {
     directory: await getApplicationDocumentsDirectory().then((dir) => dir.path),
   );
 
-  runApp(MyApp(isar: isar));
+  runApp(
+    ProviderScope(
+      child: MyApp(isar: isar),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

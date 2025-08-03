@@ -1,6 +1,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sjlshs_chronos/features/device_management/device_management.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
@@ -53,6 +54,7 @@ class RecordManager {
         start: DateTime(lastSync.year, lastSync.month, lastSync.day),
         end: DateTime(now.year, now.month, now.day),
       );
+      print(absences);
       try {
         await writeAbsencesToFirestore(absences, student);
       } catch (e) {
@@ -67,23 +69,24 @@ class RecordManager {
   Future<void> writeAbsencesToFirestore(List<DateTime> absences, Student student) async {
     final batch = firestore.batch();
     for (var i = 0; i < absences.length; i += 500) {
-      final chunk = absences.sublist(i, i + 500);
+      final chunk = absences.sublist(i, (i + 500).clamp(0, absences.length));
       for (DateTime absence in chunk) {
         final docID = '${student.lrn}_${absence.toIso8601String().substring(0,10)}';
         final docRef = firestore.collection('attendance').doc(docID);
         final data = {
-          'lrn': student.lrn,
-          'firstName': student.firstName,
-          'lastName': student.lastName,
-          'studentYear': student.studentYear,
-          'studentSection': student.studentSection,
-          'timestamp': absence,
-          'isAbsent': true,
-        };
-        batch.set(docRef, data);
-      }
-      await batch.commit();
+        'lrn': student.lrn,
+        'firstName': student.firstName,
+        'lastName': student.lastName,
+        'studentYear': student.studentYear,
+        'studentSection': student.studentSection,
+        'timestamp': absence,
+        'isAbsent': true,
+      };
+      batch.set(docRef, data, SetOptions(merge: true));
     }
+    await batch.commit();
+  }
+
   }
 
   Future<DateTime?> getLastSyncDate() async {
@@ -95,6 +98,13 @@ class RecordManager {
   Future<void> setLastSyncDate(DateTime date) async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('last_sync_timestamp', date.millisecondsSinceEpoch);
+
+      // commit sync to firestore
+      final deviceID = await getDeviceID();
+      await firestore.collection('devices').doc(deviceID).set(
+        {
+        'lastSync': date,
+      }, SetOptions(merge: true));
   }
 
   // get all student records from firestore for report generation

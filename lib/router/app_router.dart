@@ -8,9 +8,13 @@ import 'package:sjlshs_chronos/features/student_management/screens/attendance_re
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:sjlshs_chronos/main.dart';
 
+
+
 class AppRouter {
   final Isar isar;
   final FirebaseFirestore firestore;
+
+
   
   AppRouter({
     required this.isar,

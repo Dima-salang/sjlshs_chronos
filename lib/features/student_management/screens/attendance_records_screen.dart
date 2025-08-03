@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:isar/isar.dart';
+import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
-import 'package:sjlshs_chronos/features/student_management/models/students.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
-import 'package:collection/collection.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
+import 'package:sjlshs_chronos/features/device_management/device_management.dart';
+
 
 class AttendanceRecordsScreen extends StatefulWidget {
   final Isar isar;
@@ -23,12 +26,32 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   DateTime _selectedDate = DateTime.now();
   List<AttendanceRecord> _records = [];
   bool _isLoading = false;
+  bool _isSyncing = false;
   String _searchQuery = '';
+  String? _syncMessage;
+  bool _syncSuccess = false;
+  int _selectedTabIndex = 0;
+  List<Map<String, dynamic>> _syncStatusList = [];
+  bool _isLoadingSyncStatus = false;
+
+  late final RecordManager _recordManager;
 
   @override
   void initState() {
     super.initState();
-    _loadRecords();
+    _recordManager = RecordManager(
+      firestore: FirebaseFirestore.instance,
+      isar: widget.isar,
+    );
+    _loadRecords();    
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_selectedTabIndex == 1) {
+      _loadSyncStatus();
+    }
   }
 
   Future<void> _loadRecords() async {
@@ -90,100 +113,331 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     }).toList();
   }
 
+  Future<void> _syncAbsences() async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isSyncing = true;
+      _syncMessage = 'Syncing absences...';
+      _syncSuccess = false;
+    });
+
+    try {
+      await _recordManager.syncAbsences();
+      setState(() {
+        _syncMessage = 'Absences synced successfully!';
+        _syncSuccess = true;
+      });
+    } catch (e) {
+      debugPrint('Error syncing absences: $e');
+      setState(() {
+        _syncMessage = 'Failed to sync absences: ${e.toString()}';
+        _syncSuccess = false;
+      });
+    } finally {
+      setState(() {
+        _isSyncing = false;
+      });
+      
+      // Clear the message after 5 seconds
+      await Future.delayed(const Duration(seconds: 5));
+      if (mounted) {
+        setState(() {
+          _syncMessage = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadSyncStatus() async {
+    if (_isLoadingSyncStatus) return;
+    
+    setState(() {
+      _isLoadingSyncStatus = true;
+    });
+
+    try {
+      final statusList = await DeviceManagement.getSyncStatus();
+      setState(() {
+        _syncStatusList = statusList;
+      });
+    } catch (e) {
+      debugPrint('Error loading sync status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load sync status: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSyncStatus = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      title: 'Attendance Records',
-      body: Column(
-        children: [
-          // Date selector and search bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
+    return DefaultTabController(
+      length: 2,
+      child: Builder(
+        builder: (context) {
+          return AppScaffold(
+            title: 'Attendance Records',
+            body: Column(
               children: [
-                // Date selector
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: () {
-                        setState(() {
-                          _selectedDate = _selectedDate.subtract(const Duration(days: 1));
-                        });
-                        _loadRecords();
-                      },
-                    ),
-                    TextButton(
-                      onPressed: () => _selectDate(context),
-                      child: Text(
-                        DateFormat('MMMM d, y').format(_selectedDate),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: () {
-                        setState(() {
-                          _selectedDate = _selectedDate.add(const Duration(days: 1));
-                        });
-                        _loadRecords();
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Search bar
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, LRN, or section',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                  onChanged: (value) {
+                TabBar(
+                  onTap: (index) {
                     setState(() {
-                      _searchQuery = value;
+                      _selectedTabIndex = index;
+                      if (index == 1) {
+                        _loadSyncStatus();
+                      }
                     });
                   },
+                  tabs: const [
+                    Tab(icon: Icon(Icons.list), text: 'Records'),
+                    Tab(icon: Icon(Icons.sync), text: 'Sync Status'),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Records Tab
+                      _buildRecordsTab(),
+                      // Sync Status Tab
+                      _buildSyncStatusTab(),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-          
-          // Records list
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredRecords.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.assignment_outlined, size: 64, color: Colors.grey),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No attendance records found\nfor ${DateFormat('MMMM d, y').format(_selectedDate)}',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.grey,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _filteredRecords.length,
-                        itemBuilder: (context, index) {
-                          final record = _filteredRecords[index];
-                          return _buildRecordItem(record);
-                        },
-                      ),
-          ),
-        ],
+          );
+        }
       ),
+    );
+  }
+
+  Widget _buildSyncStatusTab() {
+    return Column(
+      children: [
+        // Sync button and status
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Sync button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: _isSyncing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.sync, size: 20),
+                      label: Text(_isSyncing ? 'Syncing...' : 'Sync Records'),
+                      onPressed: _isSyncing ? null : _syncAbsences,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Refresh button
+                  IconButton(
+                    icon: _isLoadingSyncStatus
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh, size: 24),
+                    onPressed: _isLoadingSyncStatus ? null : _loadSyncStatus,
+                    tooltip: 'Refresh sync status',
+                  ),
+                ],
+              ),
+              if (_syncMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _syncMessage!,
+                  style: TextStyle(
+                    color: _syncSuccess ? Colors.green : Colors.red,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
+        ),
+        
+        // Devices sync status list
+        Expanded(
+          child: _isLoadingSyncStatus
+              ? const Center(child: CircularProgressIndicator())
+              : _syncStatusList.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.sync_problem, size: 48, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text(
+                            'No sync data available',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _syncStatusList.length,
+                      itemBuilder: (context, index) {
+                        final device = _syncStatusList[index];
+                        final lastSync = device['lastSync'] as DateTime?;
+                        final isThisDevice = device['isThisDevice'] as bool;
+                        
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          color: isThisDevice ? Theme.of(context).colorScheme.primaryContainer : null,
+                          child: ListTile(
+                            leading: Icon(
+                              isThisDevice ? Icons.phone_android : Icons.device_unknown,
+                              color: isThisDevice ? Theme.of(context).colorScheme.primary : null,
+                            ),
+                            title: Text(
+                              '${device['deviceId']} ${isThisDevice ? '(This Device)' : ''}',
+                              style: TextStyle(
+                                fontWeight: isThisDevice ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                            subtitle: Text(
+                              lastSync != null
+                                  ? 'Last sync: ${DateFormat('MMM d, y hh:mm a').format(lastSync)}'
+                                  : 'Never synced',
+                            ),
+                            trailing: lastSync != null
+                                ? Text(
+                                    '${DateTime.now().difference(lastSync).inHours < 24 ? 'Today' : '${DateTime.now().difference(lastSync).inDays} days ago'}',
+                                    style: TextStyle(
+                                      color: DateTime.now().difference(lastSync).inDays > 7
+                                          ? Colors.red
+                                          : Colors.green,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecordsTab() {
+    return Column(
+      children: [
+        // Date selector and search bar
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // Date selector and sync button row
+              Row(
+                children: [
+                  // Date selector
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: () {
+                            setState(() {
+                              _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+                            });
+                            _loadRecords();
+                          },
+                        ),
+                        TextButton(
+                          onPressed: () => _selectDate(context),
+                          child: Text(
+                            DateFormat('MMMM d, y').format(_selectedDate),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: () {
+                            setState(() {
+                              _selectedDate = _selectedDate.add(const Duration(days: 1));
+                            });
+                            _loadRecords();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Search bar
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search by name, LRN, or section',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        
+        // Records list
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _filteredRecords.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.assignment_outlined, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No attendance records found\nfor ${DateFormat('MMMM d, y').format(_selectedDate)}',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: Colors.grey,
+                                ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredRecords.length,
+                      itemBuilder: (context, index) {
+                        final record = _filteredRecords[index];
+                        return _buildRecordItem(record);
+                      },
+                    ),
+        ),
+      ],
     );
   }
 
@@ -243,7 +497,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.pop(),
             child: const Text('Close'),
           ),
         ],

@@ -81,13 +81,15 @@ class VerificationInfoScreen extends ConsumerWidget {
           color: Colors.orange,
         ),
         const SizedBox(height: 24),
-        const Text(
-          'Account Pending Verification',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        const Center(
+          child: Text(
+            'Account Pending Verification',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
         ),
         const SizedBox(height: 16),
         const Text(
-          'Your account is currently under review by our administrators. This process typically takes 24-48 hours.',
+          'Your account is currently under review by the admin. Kindly coordinate with the admin to inform of your registration. This process typically takes 24-48 hours.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 16),
         ),

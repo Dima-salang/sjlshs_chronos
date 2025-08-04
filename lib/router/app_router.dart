@@ -1,39 +1,67 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:isar/isar.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sjlshs_chronos/features/student_management/screens/student_management_screen.dart';
 import 'package:sjlshs_chronos/features/student_management/screens/attendance_records_screen.dart';
-import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:sjlshs_chronos/features/auth/screens/login_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/register_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/account_verification_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/verification_info_screen.dart';
-import 'package:sjlshs_chronos/features/auth/user_metadata.dart' as user_metadata;
+import 'package:sjlshs_chronos/features/student_management/screens/teacher_attendance_screen.dart';
+import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
 import 'package:sjlshs_chronos/main.dart';
+import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
+import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 
 
 
-class AppRouter {
-  final Isar isar;
-  final FirebaseFirestore firestore;
-  final bool isUserLoggedIn;
-  final user_metadata.UserMetadata? userMetadata;
+final routerProvider = Provider<GoRouter>((ref) {
+  final isarAsync = ref.watch(isarProvider);
+  final userAsync = ref.watch(currentUserProvider);
+  final userMetadataAsync = ref.watch(userMetadataProvider);
+  
+  // Show loading screen while checking auth state
+  if (userAsync.isLoading || isarAsync.isLoading) {
+    return GoRouter(
+      routes: [
+        GoRoute(
+          path: '/loading',
+          pageBuilder: (context, state) => MaterialPage(
+            child: Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        ),
+      ],
+      initialLocation: '/loading',
+    );
+  }
 
-  AppRouter({
-    required this.isar,
-    required this.firestore,
-    required this.isUserLoggedIn,
-    required this.userMetadata,
-  });
+  final isar = isarAsync.value!;
+  final user = userAsync.value;
+  final userMetadata = userMetadataAsync.value;
+  
+  final bool isUserLoggedIn = user != null;
 
-  late final router = GoRouter(
+  return GoRouter(
     initialLocation: isUserLoggedIn ? '/scanner' : '/login',
     redirect: (context, state) {
-      final isLoggedIn = FirebaseAuth.instance.currentUser != null;
+      // Handle loading state
+      if (userAsync.isLoading || isarAsync.isLoading) {
+        return '/loading';
+      }
+      
+      final isLoggedIn = user != null;
       final isAuthRoute = state.uri.path == '/login' || state.uri.path == '/register';
       final isVerificationScreen = state.uri.path == '/verification-screen';
+      final isError = userAsync.hasError || isarAsync.hasError;
+      
+      if (isError) {
+        print('Error in router state:');
+        if (userAsync.hasError) print('User error: ${userAsync.error}');
+        if (isarAsync.hasError) print('Isar error: ${isarAsync.error}');
+        return '/error';
+      }
       
       if (!isLoggedIn) {
         return isAuthRoute ? null : '/login';
@@ -47,8 +75,13 @@ class AppRouter {
         return '/verification-screen';
       }
       
-      // If user is verified and on verification screen, redirect to home
+      // If user is verified and on verification screen, redirect to appropriate dashboard
       if (isVerified && isVerificationScreen) {
+        // Redirect teachers to their attendance dashboard
+        if (userMetadata?.role == 'teacher') {
+          return '/teacher-attendance';
+        }
+        // Default redirect for other roles
         return '/scanner';
       }
 
@@ -76,6 +109,15 @@ class AppRouter {
         path: '/verification-screen',
         name: 'verification-info',
         builder: (context, state) => const VerificationInfoScreen(),
+      ),
+      
+      // Teacher attendance dashboard
+      GoRoute(
+        path: '/teacher-attendance',
+        name: 'teacher-attendance',
+        builder: (context, state) => TeacherAttendanceScreen(
+          isar: isar,
+        ),
       ),
       
       // Main app routes
@@ -124,3 +166,4 @@ class AppRouter {
     ),
   );
 }
+);

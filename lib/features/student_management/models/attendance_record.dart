@@ -27,5 +27,18 @@ class AttendanceRecord {
     required this.isPresent,
     this.isLate,
   });
+
+  factory AttendanceRecord.fromMap(Map<String, dynamic> map) {
+    return AttendanceRecord(
+      lrn: map['lrn'],
+      firstName: map['firstName'],
+      lastName: map['lastName'],
+      studentYear: map['studentYear'],
+      studentSection: map['studentSection'],
+      timestamp: map['timestamp'].toDate(),
+      isPresent: map['isPresent'],
+      isLate: map['isLate'],
+    );
+  }
   
 }

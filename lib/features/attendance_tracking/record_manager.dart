@@ -94,6 +94,8 @@ class RecordManager {
 
   }
 
+
+
   Future<DateTime?> getLastSyncDate() async {
     final prefs = await SharedPreferences.getInstance();
     final millis = prefs.getInt('last_sync_timestamp');
@@ -127,6 +129,22 @@ class RecordManager {
     } catch (e) {
       logger.e('Error getting student records: $e');
       throw Exception('Error getting student records: $e');
+    }
+  }
+
+
+  // get absences from firestore for a specific section
+  Future<List<AttendanceRecord>> getAbsencesFromFirestore({
+    String? section,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    try {
+      final absences = await firestore.collection('attendance').where('timestamp',isGreaterThanOrEqualTo:start,isLessThanOrEqualTo:end).where('section',isEqualTo:section).get();
+      return absences.docs.map((doc) => AttendanceRecord.fromMap(doc.data())).toList();
+    } catch (e) {
+      logger.e('Error getting absences from Firestore: $e');
+      throw Exception('Error getting absences from Firestore: $e');
     }
   }
 

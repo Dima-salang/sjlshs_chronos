@@ -27,40 +27,23 @@ void main() async {
 
 
 
-  // Initialize Isar
-  final isar = await Isar.open(
-    [AttendanceRecordSchema, StudentSchema],
-    directory: await getApplicationDocumentsDirectory().then((dir) => dir.path),
-  );
 
   runApp(
     ProviderScope(
-      child: MyApp(isar: isar),
+      child: MyApp(),
     ),
   );
 }
 
 class MyApp extends ConsumerWidget {
-  final Isar isar;
   
   const MyApp({
     super.key, 
-    required this.isar,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-      // Get the current user to determine initial route
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final userMetadata = ref.watch(userMetadataProvider).value;
-    
-    // Create router with dependencies
-    final router = AppRouter(
-      isar: isar,
-      firestore: FirebaseFirestore.instance,
-      isUserLoggedIn: currentUser != null,
-      userMetadata: userMetadata,
-    ).router;
+    final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
       title: 'SJLSHS Chronos',
@@ -96,13 +79,11 @@ class QRScannerScreen extends StatefulWidget {
 class _QRScannerScreenState extends State<QRScannerScreen> {
   final List<AttendanceRecord> _recentScans = [];
   late Future<String> _encryptionKeyFuture;
-  late Isar? _isar;
   
   @override
   void initState() {
     super.initState();
     _encryptionKeyFuture = EncryptionUtils.loadEncryptionKeyAsString();
-    _isar = Isar.getInstance();
   }
 
   void _handleScanSuccess(AttendanceRecord record) {
@@ -151,7 +132,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   return QRScanner(
                     onScanSuccess: _handleScanSuccess,
                     onError: _handleError,
-                    isar: _isar!,
                   );
                 }
               },

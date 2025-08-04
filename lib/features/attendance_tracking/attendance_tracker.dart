@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:convert';
 import 'package:pointycastle/export.dart' as pointycastle;
+import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:sjlshs_chronos/utils/encryption_utils.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:isar/isar.dart';
@@ -41,23 +43,21 @@ class AttendanceRecordIsar {
   });
 }
 
-class QRScanner extends StatefulWidget {
+class QRScanner extends ConsumerStatefulWidget {
   final Function(AttendanceRecord)? onScanSuccess;
   final Function(String)? onError;
-  final Isar isar;
   
   const QRScanner({
     Key? key,
     this.onScanSuccess,
     this.onError,
-    required this.isar,
   }) : super(key: key);
 
   @override
-  State<QRScanner> createState() => _QRScannerState();
+  ConsumerState<QRScanner> createState() => _QRScannerState();
 }
 
-class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
+class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateMixin {
   late MobileScannerController _controller;
   late AnimationController _scanAnimationController;
   late AnimationController _successAnimationController;
@@ -71,6 +71,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
   String _errorMessage = '';
   DateTime? _lastScanTime;
   List<AttendanceRecord> _recentScans = [];
+  late final Isar isar;
 
   @override
   void initState() {
@@ -78,8 +79,15 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
     _initializeController();
     _initializeAnimations();
     _requestPermissions();
-    recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: widget.isar);
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    isar = ref.watch(isarProvider).value!;
+    recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: isar);
+  }
+
 
   void _initializeController() {
     _controller = MobileScannerController(
@@ -189,7 +197,7 @@ class _QRScannerState extends State<QRScanner> with TickerProviderStateMixin {
       final lrn = scannedDataMap['student_id'];
 
       // get student from isar
-      final student = await widget.isar.students.filter().lrnEqualTo(lrn).findFirst();
+      final student = await isar.students.filter().lrnEqualTo(lrn).findFirst();
       
       if (student == null) {
         setState(() {

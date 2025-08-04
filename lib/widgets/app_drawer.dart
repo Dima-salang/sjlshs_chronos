@@ -83,6 +83,16 @@ class AppDrawer extends StatelessWidget {
               context.push('/attendance');
             },
           ),
+          _buildListTile(
+            context: context,
+            icon: Icons.assignment,
+            title: 'Teacher Attendance',
+            route: '/teacher-attendance',
+            currentRoute: currentRoute,
+            onTap: () {
+              context.push('/teacher-attendance');
+            },
+          ),
           
             const Divider(),
             const Padding(

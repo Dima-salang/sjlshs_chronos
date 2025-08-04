@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:path_provider/path_provider.dart';
@@ -6,11 +7,11 @@ import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.d
 import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
+import 'package:sjlshs_chronos/utils/encryption_utils.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'package:isar/isar.dart';
-import 'utils/encryption_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() async {
@@ -46,14 +47,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+      // Get the current user to determine initial route
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
     // Create router with dependencies
     final router = AppRouter(
       isar: isar,
       firestore: FirebaseFirestore.instance,
-    );
+      isUserLoggedIn: currentUser != null,
+    ).router;
 
     return MaterialApp.router(
       title: 'SJLSHS Chronos',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF6366F1),
@@ -70,8 +76,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'SF Pro Display',
       ),
-      routerConfig: router.router,
-      debugShowCheckedModeBanner: false,
+      routerConfig: router,
     );
   }
 }

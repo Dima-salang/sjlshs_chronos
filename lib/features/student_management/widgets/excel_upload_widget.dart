@@ -1,8 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:excel/excel.dart';
 import 'package:isar/isar.dart';
-import 'package:sjlshs_chronos/features/student_management/models/students.dart';
 import 'package:sjlshs_chronos/features/student_management/student_manager.dart';
 import 'package:sjlshs_chronos/features/logging/chronos_logger.dart';
 import 'package:logger/logger.dart';

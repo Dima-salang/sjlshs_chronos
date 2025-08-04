@@ -1,8 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sjlshs_chronos/features/auth/auth_service.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({Key? key}) : super(key: key);
+
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +49,9 @@ class AppDrawer extends StatelessWidget {
             title: 'Home',
             route: '/',
             currentRoute: currentRoute,
+            onTap: () {
+              context.push('/');
+            },
           ),
           _buildListTile(
             context: context,
@@ -52,6 +59,9 @@ class AppDrawer extends StatelessWidget {
             title: 'QR Scanner',
             route: '/scanner',
             currentRoute: currentRoute,
+            onTap: () {
+              context.push('/scanner');
+            },
           ),
           _buildListTile(
             context: context,
@@ -59,6 +69,9 @@ class AppDrawer extends StatelessWidget {
             title: 'Student Management',
             route: '/students',
             currentRoute: currentRoute,
+            onTap: () {
+              context.push('/students');
+            },
           ),
           _buildListTile(
             context: context,
@@ -66,7 +79,34 @@ class AppDrawer extends StatelessWidget {
             title: 'Attendance Records',
             route: '/attendance',
             currentRoute: currentRoute,
+            onTap: () {
+              context.push('/attendance');
+            },
           ),
+          
+            const Divider(),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Text(
+                'Admin',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            _buildListTile(
+              context: context,
+              icon: Icons.verified_user,
+              title: 'Account Verification',
+              route: '/admin/accounts',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/admin/accounts');
+              },
+            ),
+          
           const Divider(),
           _buildListTile(
             context: context,
@@ -74,6 +114,20 @@ class AppDrawer extends StatelessWidget {
             title: 'Settings',
             route: '/settings',
             currentRoute: currentRoute,
+            onTap: () {
+              context.push('/settings');
+            },
+          ),
+          _buildListTile(
+            context: context,
+            icon: Icons.logout,
+            title: 'Logout',
+            route: '/login',
+            currentRoute: currentRoute,
+            onTap: () async {
+              await AuthService(FirebaseAuth.instance, FirebaseFirestore.instance).logOutUser();
+              context.push('/login');
+            },
           ),
         ],
       ),
@@ -86,6 +140,7 @@ class AppDrawer extends StatelessWidget {
     required String title,
     required String route,
     required String currentRoute,
+    required VoidCallback onTap,
   }) {
     final isSelected = currentRoute == route;
 
@@ -103,7 +158,7 @@ class AppDrawer extends StatelessWidget {
       ),
       onTap: () {
         if (!isSelected) {
-          context.push(route);
+          onTap();
         }
         context.pop(context); // Close the drawer
       },

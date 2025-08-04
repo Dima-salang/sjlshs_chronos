@@ -7,7 +7,6 @@ import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
-import 'package:sjlshs_chronos/features/device_management/device_management.dart';
 
 
 class AttendanceRecordsScreen extends StatefulWidget {

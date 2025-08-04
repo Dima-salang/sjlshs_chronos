@@ -50,6 +50,7 @@ class AuthService  {
   Future<void> createAccountRecord(User user, String role) async {
     try {
       await _firestore.collection('accounts').doc(user.uid).set({
+        'uid': user.uid,
         'email': user.email,
         'role': role,
         'is_verified': false,
@@ -57,6 +58,30 @@ class AuthService  {
       });
     } catch (e) {
       print(e);
+    }
+  }
+
+  // log out user 
+  Future<void> logOutUser() async {
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      print(e);
+    }
+  }
+
+
+  // get the user's role
+  Future<String?> getUserRole() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return null;
+      final userDoc = await _firestore.collection('accounts').doc(user.uid).get();
+      if (!userDoc.exists) return null;
+      return userDoc.data()?['role'];
+    } catch (e) {
+      print(e);
+      return null;
     }
   }
 }

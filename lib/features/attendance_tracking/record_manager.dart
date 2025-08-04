@@ -44,6 +44,11 @@ class RecordManager {
   Future<void> syncAbsences() async {
     final now = DateTime.now();
     final lastSync = await getLastSyncDate() ?? now.subtract(Duration(days: 1)); // fallback
+    
+    // check if last sync is in the past
+    if (lastSync.isAfter(now)) {
+      throw Exception('Last sync is in the future');
+    }
 
     // for every student in isar, get their lrn
     final students = await isar.students.where().findAll();

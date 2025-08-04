@@ -12,6 +12,7 @@ import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'package:isar/isar.dart';
+import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() async {
@@ -23,6 +24,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+
 
   // Initialize Isar
   final isar = await Isar.open(
@@ -37,7 +40,7 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   final Isar isar;
   
   const MyApp({
@@ -46,15 +49,17 @@ class MyApp extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
       // Get the current user to determine initial route
     final currentUser = FirebaseAuth.instance.currentUser;
+    final userMetadata = ref.watch(userMetadataProvider).value;
     
     // Create router with dependencies
     final router = AppRouter(
       isar: isar,
       firestore: FirebaseFirestore.instance,
       isUserLoggedIn: currentUser != null,
+      userMetadata: userMetadata,
     ).router;
 
     return MaterialApp.router(

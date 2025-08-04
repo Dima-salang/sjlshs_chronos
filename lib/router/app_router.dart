@@ -9,6 +9,8 @@ import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:sjlshs_chronos/features/auth/screens/login_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/register_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/account_verification_screen.dart';
+import 'package:sjlshs_chronos/features/auth/screens/verification_info_screen.dart';
+import 'package:sjlshs_chronos/features/auth/user_metadata.dart' as user_metadata;
 import 'package:sjlshs_chronos/main.dart';
 
 
@@ -17,11 +19,13 @@ class AppRouter {
   final Isar isar;
   final FirebaseFirestore firestore;
   final bool isUserLoggedIn;
+  final user_metadata.UserMetadata? userMetadata;
 
   AppRouter({
     required this.isar,
     required this.firestore,
     required this.isUserLoggedIn,
+    required this.userMetadata,
   });
 
   late final router = GoRouter(
@@ -29,9 +33,23 @@ class AppRouter {
     redirect: (context, state) {
       final isLoggedIn = FirebaseAuth.instance.currentUser != null;
       final isAuthRoute = state.uri.path == '/login' || state.uri.path == '/register';
-
-      if (!isLoggedIn && !isAuthRoute) {
-        return '/login';
+      final isVerificationScreen = state.uri.path == '/verification-screen';
+      
+      if (!isLoggedIn) {
+        return isAuthRoute ? null : '/login';
+      }
+      
+      // If user is logged in, check verification status
+      final isVerified = userMetadata?.isVerified ?? false;
+      
+      // If user is not verified and not already on verification screen, redirect
+      if (!isVerified && !isVerificationScreen && !isAuthRoute) {
+        return '/verification-screen';
+      }
+      
+      // If user is verified and on verification screen, redirect to home
+      if (isVerified && isVerificationScreen) {
+        return '/scanner';
       }
 
       if (isLoggedIn && isAuthRoute) {
@@ -51,6 +69,13 @@ class AppRouter {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      
+      // Verification info screen
+      GoRoute(
+        path: '/verification-screen',
+        name: 'verification-info',
+        builder: (context, state) => const VerificationInfoScreen(),
       ),
       
       // Main app routes

@@ -41,7 +41,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final user = await authService.register(
         _emailController.text.trim(),
         _passwordController.text.trim(),
-        'user', // Default role
+        'teacher', // Default role
       );
 
       if (user != null) {

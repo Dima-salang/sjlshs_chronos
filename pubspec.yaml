@@ -55,6 +55,7 @@ dependencies:
   package_info_plus: ^8.3.0
   firebase_auth: ^6.0.0
   flutter_riverpod: ^2.6.1
+  open_file: ^3.5.10
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,7 @@
 
+import 'dart:io';
+import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sjlshs_chronos/features/device_management/device_management.dart';
@@ -114,39 +117,57 @@ class RecordManager {
       }, SetOptions(merge: true));
   }
 
-  // get all student records from firestore for report generation
-  Future<QuerySnapshot<Map<String, dynamic>>> getStudentRecords(String reportDuration) async {
-    try {
-      if (reportDuration == 'today') {
-        return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 1)), isLessThanOrEqualTo: DateTime.now()).get();
-      } else if (reportDuration == 'month') {
-        return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 30)), isLessThanOrEqualTo: DateTime.now()).get();
-      } else if (reportDuration == 'year') {
-      return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: DateTime.now().subtract(Duration(days: 365)), isLessThanOrEqualTo: DateTime.now()).get();
-    } else {
-      return await firestore.collection('attendance').get();
-    }
-    } catch (e) {
-      logger.e('Error getting student records: $e');
-      throw Exception('Error getting student records: $e');
-    }
-  }
 
 
   // get absences from firestore for a specific section
-  Future<List<AttendanceRecord>> getAbsencesFromFirestore({
-    String? section,
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    try {
-      final absences = await firestore.collection('attendance').where('timestamp',isGreaterThanOrEqualTo:start,isLessThanOrEqualTo:end).where('section',isEqualTo:section).get();
-      return absences.docs.map((doc) => AttendanceRecord.fromMap(doc.data())).toList();
-    } catch (e) {
-      logger.e('Error getting absences from Firestore: $e');
-      throw Exception('Error getting absences from Firestore: $e');
+Future<List<Map<String, dynamic>>> getAbsencesFromFirestore({
+  String? section,
+  required DateTime start,
+  required DateTime end,
+}) async {
+  try {
+    print(section);
+    var query = firestore
+        .collection('attendance')
+        .where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end);
+    
+    // Only add the section filter if it's not null
+    if (section != null) {
+      query = query.where('studentSection', isEqualTo: section);
     }
+    
+    // Add the order by
+    query = query.orderBy('timestamp', descending: true);
+    
+    final absences = await query.get();
+    print(absences.docs);
+    return absences.docs.map((doc) => doc.data()).toList();
+  } catch (e) {
+    logger.e('Error getting absences from Firestore: $e');
+    throw Exception('Error getting absences from Firestore: $e');
   }
+}
+
+
+// get associated image of student from a folder
+Future<String?> getStudentImagePath(String lrn) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final folderPath = prefs.getString('student_images_path');
+    if (folderPath == null) {
+      return null;
+    }
+    final file = File('$folderPath/$lrn.jpg');
+    if (await file.exists()) {
+      return file.path;
+    }
+    return null;
+  } catch (e) {
+    logger.e('Error getting student image path: $e');
+    return null;
+  }
+}
+
 
 
 

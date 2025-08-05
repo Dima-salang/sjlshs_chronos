@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +16,7 @@ import 'package:sjlshs_chronos/features/student_management/models/students.dart'
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum ScanState {
   scanning,
@@ -21,32 +25,10 @@ enum ScanState {
   error,
 }
 
-class AttendanceRecordIsar {
-  final String lrn;
-  final String firstName;
-  final String lastName;
-  final String studentYear;
-  final String studentSection;
-  final DateTime timestamp;
-  final bool isPresent;
-  final bool isLate;
-
-  AttendanceRecordIsar({
-    required this.lrn,
-    required this.firstName,
-    required this.lastName,
-    required this.studentYear,
-    required this.studentSection,
-    required this.timestamp,
-    required this.isPresent,
-    required this.isLate,
-  });
-}
-
 class QRScanner extends ConsumerStatefulWidget {
   final Function(AttendanceRecord)? onScanSuccess;
   final Function(String)? onError;
-  
+
   const QRScanner({
     Key? key,
     this.onScanSuccess,
@@ -59,18 +41,16 @@ class QRScanner extends ConsumerStatefulWidget {
 
 class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateMixin {
   late MobileScannerController _controller;
-  late AnimationController _scanAnimationController;
-  late AnimationController _successAnimationController;
-  late Animation<double> _scanAnimation;
-  late Animation<double> _successAnimation;
+  late AnimationController _borderAnimationController;
+  late AnimationController _feedbackAnimationController;
   late RecordManager recordManager;
 
   ScanState _scanState = ScanState.scanning;
-  String _scannedValue = '';
-  String _lastScannedId = '';
   String _errorMessage = '';
+  String _lastScannedId = '';
   DateTime? _lastScanTime;
-  List<AttendanceRecord> _recentScans = [];
+  Student? _scannedStudent;
+  String? _studentImagePath;
   late final Isar isar;
 
   @override
@@ -88,7 +68,6 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: isar);
   }
 
-
   void _initializeController() {
     _controller = MobileScannerController(
       detectionTimeoutMs: 1500,
@@ -99,33 +78,15 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   }
 
   void _initializeAnimations() {
-    _scanAnimationController = AnimationController(
+    _borderAnimationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
-    );
-    
-    _successAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+
+    _feedbackAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-
-    _scanAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _scanAnimationController,
-      curve: Curves.easeInOut,
-    ));
-
-    _successAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _successAnimationController,
-      curve: Curves.elasticOut,
-    ));
-
-    _scanAnimationController.repeat();
   }
 
   Future<void> _requestPermissions() async {
@@ -159,55 +120,40 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   }
 
   Future<void> _handleBarcodeScan(BarcodeCapture capture) async {
-    // Check if we have any barcodes
-    if (capture.barcodes.isEmpty) {
-      debugPrint('No barcodes found in scan');
-      return;
-    }
-    
+    if (_scanState != ScanState.scanning || capture.barcodes.isEmpty) return;
+
     final barcode = capture.barcodes.first;
     final scannedData = barcode.rawValue;
 
-    if (scannedData == null || scannedData.isEmpty) {
-      debugPrint('Scanned barcode has no data');
-      return;
-    }
+    if (scannedData == null || scannedData.isEmpty) return;
 
-    // Prevent duplicate scans within 3 seconds
-    if (_lastScannedId == scannedData && 
-        _lastScanTime != null && 
+    if (_lastScannedId == scannedData &&
+        _lastScanTime != null &&
         DateTime.now().difference(_lastScanTime!).inSeconds < 3) {
       return;
     }
 
     setState(() {
       _scanState = ScanState.processing;
-      _scannedValue = scannedData;
+      _lastScannedId = scannedData;
+      _lastScanTime = DateTime.now();
     });
 
-    // Haptic feedback
     HapticFeedback.mediumImpact();
 
     try {
       final timestamp = DateTime.now();
-      // decrypt scanned data asynchronously
       final scannedDataMap = await _decryptData(scannedData);
-      print(scannedDataMap);
-
       final lrn = scannedDataMap['student_id'];
 
-      // get student from isar
       final student = await isar.students.filter().lrnEqualTo(lrn).findFirst();
-      
+
       if (student == null) {
-        setState(() {
-          _scanState = ScanState.error;
-          _errorMessage = 'Student with LRN $lrn not found';
-        });
-        return;
+        throw 'Student with LRN $lrn not found';
       }
-      
-      // create new record
+
+      final imagePath = await recordManager.getStudentImagePath(lrn);
+
       final record = AttendanceRecord(
         lrn: lrn,
         firstName: student.firstName,
@@ -219,68 +165,57 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
       );
 
       await recordManager.addRecordToIsar(record);
+      widget.onScanSuccess?.call(record);
 
-      // Add to recent scans
       setState(() {
-        _recentScans.insert(0, record);
         _scanState = ScanState.success;
+        _scannedStudent = student;
+        _studentImagePath = imagePath;
       });
 
-      // Show success feedback
-      _successAnimationController.reset();
-      _successAnimationController.forward();
+      _feedbackAnimationController.forward();
 
-      // Reset after delay
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 3));
       if (mounted) {
-        setState(() {
-          _scanState = ScanState.scanning;
+        _feedbackAnimationController.reverse().then((_) {
+          setState(() {
+            _scanState = ScanState.scanning;
+            _scannedStudent = null;
+            _studentImagePath = null;
+          });
         });
       }
     } catch (e) {
-      debugPrint('Error processing QR code: $e');
       setState(() {
         _scanState = ScanState.error;
-        _errorMessage = 'Error processing QR code: $e';
+        _errorMessage = e.toString();
       });
-      // Show error feedback
+      _feedbackAnimationController.forward();
       HapticFeedback.heavyImpact();
-      // Reset after delay
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 3));
       if (mounted) {
-        setState(() {
-          _scanState = ScanState.scanning;
+        _feedbackAnimationController.reverse().then((_) {
+          setState(() {
+            _scanState = ScanState.scanning;
+          });
         });
       }
     }
   }
 
-
   Future<Map<String, dynamic>> _decryptData(String encryptedData) async {
     try {
-      // Decode the base64 string
       final encryptedBytes = base64Decode(encryptedData);
-      
-      // Extract nonce (first 12 bytes), tag (next 16 bytes), and ciphertext (the rest)
       final nonce = encryptedBytes.sublist(0, 12);
       final tag = encryptedBytes.sublist(12, 28);
       final ciphertext = encryptedBytes.sublist(28);
-      
-      // Load the encryption key
       final key = await EncryptionUtils.loadEncryptionKey();
-      
-      // Create AES-GCM cipher
       final cipher = pointycastle.GCMBlockCipher(pointycastle.AESEngine())
         ..init(false, pointycastle.AEADParameters(pointycastle.KeyParameter(key), 128, nonce, Uint8List(0)));
-      
-      // Process the ciphertext and tag
       final paddedCiphertext = Uint8List(ciphertext.length + tag.length)
         ..setAll(0, ciphertext)
         ..setAll(ciphertext.length, tag);
-      
       final decrypted = cipher.process(paddedCiphertext);
-      
-      // Convert the decrypted bytes to a string and then to JSON
       final jsonString = utf8.decode(decrypted);
       return jsonDecode(jsonString);
     } catch (e) {
@@ -288,12 +223,11 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     }
   }
 
-
   @override
   void dispose() {
     _controller.dispose();
-    _scanAnimationController.dispose();
-    _successAnimationController.dispose();
+    _borderAnimationController.dispose();
+    _feedbackAnimationController.dispose();
     super.dispose();
   }
 
@@ -305,47 +239,219 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
         if (info.visibleFraction < 0.5) {
           _controller.stop();
         } else {
-          _controller.start();
+          if (_scanState == ScanState.scanning) {
+            _controller.start();
+          }
         }
       },
-      child: Stack(
-      children: [
-        MobileScanner(
-          controller: _controller,
-          onDetect: _handleBarcodeScan,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            MobileScanner(
+              controller: _controller,
+              onDetect: _handleBarcodeScan,
+            ),
+            _buildScannerOverlay(context),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _buildFeedbackOverlay(),
+            ),
+          ],
         ),
-        if (_scanState == ScanState.processing)
-          const Center(
-            child: CircularProgressIndicator(),
-          ),
-        if (_scanState == ScanState.success)
-          Center(
-            child: ScaleTransition(
-              scale: _successAnimation,
-              child: const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 100,
-              ),
+      ),
+    );
+  }
+
+  Widget _buildScannerOverlay(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final scanWindow = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: 250,
+      height: 250,
+    );
+    return CustomPaint(
+      size: MediaQuery.of(context).size,
+      painter: ScannerOverlayPainter(scanWindow: scanWindow, animation: _borderAnimationController),
+    );
+  }
+
+  Widget _buildFeedbackOverlay() {
+    if (_scanState == ScanState.scanning || _scanState == ScanState.processing) {
+      return const SizedBox.shrink();
+    }
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: FadeTransition(
+        opacity: _feedbackAnimationController,
+        child: ScaleTransition(
+          scale: _feedbackAnimationController,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _scanState == ScanState.success
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Center(
+              child: _scanState == ScanState.success
+                  ? StudentInfoCard(
+                      student: _scannedStudent!,
+                      imagePath: _studentImagePath,
+                    )
+                  : ErrorInfoCard(message: _errorMessage),
             ),
           ),
-        if (_scanState == ScanState.error)
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error, color: Colors.red, size: 80),
-                const SizedBox(height: 10),
-                Text(
-                  _errorMessage,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red, fontSize: 16),
-                ),
-              ],
-            ),
+        ),
+      ),
+    );
+  }
+}
+
+class ScannerOverlayPainter extends CustomPainter {
+  final Rect scanWindow;
+  final Animation<double> animation;
+
+  ScannerOverlayPainter({required this.scanWindow, required this.animation}) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final cutoutPath = Path()..addRRect(RRect.fromRectAndCorners(scanWindow, topLeft: Radius.circular(12), topRight: Radius.circular(12), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)));
+    final overlayPath = Path.combine(PathOperation.difference, backgroundPath, cutoutPath);
+
+    final overlayPaint = Paint()
+      ..color = Colors.black.withOpacity(0.5)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(overlayPath, overlayPaint);
+
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRRect(RRect.fromRectAndCorners(scanWindow, topLeft: Radius.circular(12), topRight: Radius.circular(12), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)), borderPaint);
+
+    final cornerLength = 30.0;
+    final cornerPaint = Paint()
+      ..color = Color.lerp(Colors.green, Colors.white, animation.value)!
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4;
+
+    // Top-left corner
+    canvas.drawLine(scanWindow.topLeft, scanWindow.topLeft + Offset(cornerLength, 0), cornerPaint);
+    canvas.drawLine(scanWindow.topLeft, scanWindow.topLeft + Offset(0, cornerLength), cornerPaint);
+
+    // Top-right corner
+    canvas.drawLine(scanWindow.topRight, scanWindow.topRight - Offset(cornerLength, 0), cornerPaint);
+    canvas.drawLine(scanWindow.topRight, scanWindow.topRight + Offset(0, cornerLength), cornerPaint);
+
+    // Bottom-left corner
+    canvas.drawLine(scanWindow.bottomLeft, scanWindow.bottomLeft + Offset(cornerLength, 0), cornerPaint);
+    canvas.drawLine(scanWindow.bottomLeft, scanWindow.bottomLeft - Offset(0, cornerLength), cornerPaint);
+
+    // Bottom-right corner
+    canvas.drawLine(scanWindow.bottomRight, scanWindow.bottomRight - Offset(cornerLength, 0), cornerPaint);
+    canvas.drawLine(scanWindow.bottomRight, scanWindow.bottomRight - Offset(0, cornerLength), cornerPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class StudentInfoCard extends StatelessWidget {
+  final Student student;
+  final String? imagePath;
+
+  const StudentInfoCard({Key? key, required this.student, this.imagePath}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-      ],
-    ),
-  );
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 50,
+            backgroundImage: imagePath != null ? FileImage(File(imagePath!)) : null,
+            child: imagePath == null ? const Icon(Icons.person, size: 50) : null,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${student.firstName} ${student.lastName}',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'LRN: ${student.lrn}',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${student.studentYear} - ${student.studentSection}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 24),
+          const Icon(Icons.check_circle, color: Colors.green, size: 40),
+        ],
+      ),
+    );
+  }
+}
+
+class ErrorInfoCard extends StatelessWidget {
+  final String message;
+
+  const ErrorInfoCard({Key? key, required this.message}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, color: Colors.red, size: 50),
+          const SizedBox(height: 16),
+          Text(
+            'Scan Error',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 }

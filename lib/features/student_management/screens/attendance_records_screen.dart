@@ -7,6 +7,11 @@ import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
+import 'package:sjlshs_chronos/features/attendance_tracking/report_manager.dart';
+import 'package:logger/logger.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:file_picker/file_picker.dart';
 
 
 class AttendanceRecordsScreen extends StatefulWidget {
@@ -30,6 +35,11 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   String? _syncMessage;
   bool _syncSuccess = false;
   int _selectedTabIndex = 0;
+  DateTimeRange _reportDateRange = DateTimeRange(
+    start: DateTime.now().subtract(const Duration(days: 7)),
+    end: DateTime.now(),
+  );
+  bool _isGeneratingReport = false;
   List<Map<String, dynamic>> _syncStatusList = [];
   bool _isLoadingSyncStatus = false;
 
@@ -176,10 +186,110 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     }
   }
 
+  Future<void> _generateReport() async {
+    if (_isGeneratingReport) return;
+
+    // 1. Select Directory
+    String? outputDirectory;
+    try {
+      outputDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Output Directory',
+      );
+
+      if (outputDirectory == null) {
+        // User canceled the picker
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Directory selection canceled.')),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error selecting directory: $e')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isGeneratingReport = true;
+    });
+
+    try {
+      final logger = Logger();
+      final reportManager = ReportManager(
+        isar: widget.isar,
+        firestore: FirebaseFirestore.instance,
+        logger: logger,
+      );
+
+      final fileName = 'attendance_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+      final filePath = '$outputDirectory/$fileName';
+
+      // 2. Generate the report
+      await reportManager.writeReport(
+        _reportDateRange.start,
+        _reportDateRange.end,
+        filePath,
+      );
+
+      // 3. Show success message and option to open
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report saved to $filePath'),
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () async {
+                final result = await OpenFile.open(filePath);
+                if (result.type != ResultType.done && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not open file: ${result.message}')),
+                  );
+                }
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating report: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingReport = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectReportDateRange(BuildContext context) async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      initialDateRange: _reportDateRange,
+    );
+    
+    if (picked != null && picked != _reportDateRange) {
+      setState(() {
+        _reportDateRange = picked;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Builder(
         builder: (context) {
           return AppScaffold(
@@ -198,6 +308,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                   tabs: const [
                     Tab(icon: Icon(Icons.list), text: 'Records'),
                     Tab(icon: Icon(Icons.sync), text: 'Sync Status'),
+                    Tab(icon: Icon(Icons.assessment), text: 'Reports'),
                   ],
                 ),
                 Expanded(
@@ -207,6 +318,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       _buildRecordsTab(),
                       // Sync Status Tab
                       _buildSyncStatusTab(),
+                      // Reports Tab
+                      _buildReportsTab(),
                     ],
                   ),
                 ),
@@ -510,17 +623,156 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(width: 8),
           Expanded(child: Text(value)),
         ],
       ),
+    );
+  }
+
+  Widget _buildReportsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Report Generation Card
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Generate Attendance Report',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Date Range Selection
+                  _buildDateRangeSelector(),
+                  const SizedBox(height: 24),
+
+                  // Generate Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: _isGeneratingReport
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(_isGeneratingReport ? 'Generating...' : 'Generate & Save Report'),
+                      onPressed: _isGeneratingReport ? null : _generateReport,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isGeneratingReport) ...[
+                    const SizedBox(height: 16),
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Generating report. This may take a moment...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Instructions Card
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'How it Works',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    '1. Select the date range for the report.\n'
+                    '2. Click \'Generate & Save Report\'.\n'
+                    '3. Choose a directory to save the Excel file to.\n'
+                    '4. The report will be generated and you will be notified upon completion.',
+                    style: TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateRangeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Date Range',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () => _selectReportDateRange(context),
+          borderRadius: BorderRadius.circular(8.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 20, color: Colors.grey),
+                    const SizedBox(width: 12),
+                    Text(
+                      '${DateFormat('MMM d, y').format(_reportDateRange.start)} - ${DateFormat('MMM d, y').format(_reportDateRange.end)}',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+                const Icon(Icons.arrow_drop_down, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

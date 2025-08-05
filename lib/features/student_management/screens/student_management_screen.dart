@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import '../models/students.dart';
 import '../widgets/excel_upload_widget.dart';
+import '../widgets/image_folder_import_widget.dart';
 import 'package:logger/logger.dart';
 
 final logger = Logger();
@@ -207,6 +208,7 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> with 
             isar: widget.isar,
             onStudentsImported: _loadStudents,
           ),
+          const ImageFolderImportWidget(),
         ],
       ),
     );

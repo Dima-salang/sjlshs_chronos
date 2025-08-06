@@ -28,9 +28,11 @@ enum ScanState {
 class QRScanner extends ConsumerStatefulWidget {
   final Function(AttendanceRecord)? onScanSuccess;
   final Function(String)? onError;
+  final String? encryptionKey;
 
   const QRScanner({
     Key? key,
+    this.encryptionKey,
     this.onScanSuccess,
     this.onError,
   }) : super(key: key);

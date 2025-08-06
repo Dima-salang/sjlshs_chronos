@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
 import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
+import 'package:sjlshs_chronos/features/device_management/key_management.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
 import 'package:sjlshs_chronos/utils/encryption_utils.dart';
@@ -81,12 +82,14 @@ class QRScannerScreen extends StatefulWidget {
 }
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  late Future<String> _encryptionKeyFuture;
+  late Future<String?> _encryptionKeyFuture;
+  late final SecretsManager secretsManager;
   
   @override
   void initState() {
     super.initState();
-    _encryptionKeyFuture = EncryptionUtils.loadEncryptionKeyAsString();
+    secretsManager = SecretsManager();
+    _encryptionKeyFuture = secretsManager.getEncryptionKey();
   }
 
 
@@ -115,7 +118,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       body: Column(
         children: [
           Expanded(
-            child: FutureBuilder<String>(
+            child: FutureBuilder<String?>(
               future: _encryptionKeyFuture,
               builder: (context, snapshot) {
                 print(snapshot.data);
@@ -123,6 +126,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   return const Center(child: CircularProgressIndicator());
                 } else if (snapshot.hasError) {
                   return Center(child: Text('Error loading encryption key: ${snapshot.error}'));
+                } else if (snapshot.data == null) {
+                  return const Center(child: Text('No encryption key found'));
                 } else {
                   return QRScanner(
                     onError: _handleError,

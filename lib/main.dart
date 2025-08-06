@@ -14,6 +14,7 @@ import 'router/app_router.dart';
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,12 +22,15 @@ void main() async {
   // read device id
   await DeviceManagement.getOrCreateDeviceId();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-
-
+  // check if the device is connected to the internet
+  final connectivityResult = await Connectivity().checkConnectivity();
+  if (connectivityResult != ConnectivityResult.none) {
+    // show error message
+    debugPrint('Internet connection detected');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
 
   runApp(
     ProviderScope(

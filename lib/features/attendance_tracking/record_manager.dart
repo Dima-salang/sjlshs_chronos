@@ -11,10 +11,10 @@ import 'package:sjlshs_chronos/features/student_management/models/students.dart'
 import 'package:sjlshs_chronos/features/logging/chronos_logger.dart';
 
 class RecordManager {
-  final FirebaseFirestore firestore;
+  final FirebaseFirestore? firestore;
   final Isar isar;
   final logger = getLogger();
-  RecordManager({required this.firestore, required this.isar});
+  RecordManager({this.firestore, required this.isar});
 
   Future<void> addRecordToIsar(AttendanceRecord record) async {
     // check if record for a particular lrn already exists for the same day
@@ -75,12 +75,12 @@ class RecordManager {
 
   // write absences to firestore
   Future<void> writeAbsencesToFirestore(List<DateTime> absences, Student student) async {
-    final batch = firestore.batch();
+    final batch = firestore?.batch();
     for (var i = 0; i < absences.length; i += 500) {
       final chunk = absences.sublist(i, (i + 500).clamp(0, absences.length));
       for (DateTime absence in chunk) {
         final docID = '${student.lrn}_${absence.toIso8601String().substring(0,10)}';
-        final docRef = firestore.collection('attendance').doc(docID);
+        final docRef = firestore?.collection('attendance').doc(docID);
         final data = {
         'lrn': student.lrn,
         'firstName': student.firstName,
@@ -90,9 +90,9 @@ class RecordManager {
         'timestamp': absence,
         'isAbsent': true,
       };
-      batch.set(docRef, data, SetOptions(merge: true));
+      batch?.set(docRef!, data, SetOptions(merge: true));
     }
-    await batch.commit();
+    await batch?.commit();
   }
 
   }
@@ -111,7 +111,7 @@ class RecordManager {
 
       // commit sync to firestore
       final deviceID = await getDeviceID();
-      await firestore.collection('devices').doc(deviceID).set(
+      await firestore?.collection('devices').doc(deviceID).set(
         {
         'lastSync': date,
       }, SetOptions(merge: true));
@@ -128,20 +128,19 @@ Future<List<Map<String, dynamic>>> getAbsencesFromFirestore({
   try {
     print(section);
     var query = firestore
-        .collection('attendance')
+        ?.collection('attendance')
         .where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end);
     
     // Only add the section filter if it's not null
     if (section != null) {
-      query = query.where('studentSection', isEqualTo: section);
+      query = query?.where('studentSection', isEqualTo: section);
     }
     
     // Add the order by
-    query = query.orderBy('timestamp', descending: true);
+    query = query?.orderBy('timestamp', descending: true);
     
-    final absences = await query.get();
-    print(absences.docs);
-    return absences.docs.map((doc) => doc.data()).toList();
+    final absences = await query?.get();
+    return absences?.docs.map((doc) => doc.data()).toList() ?? [];
   } catch (e) {
     logger.e('Error getting absences from Firestore: $e');
     throw Exception('Error getting absences from Firestore: $e');

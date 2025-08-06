@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +15,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  late final authService;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -22,6 +24,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() async {
+    super.initState();
+    
+
+    // check if the internet connection is available
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult != ConnectivityResult.none) {
+      // show error message
+      debugPrint('Internet connection detected');
+      authService = ref.read(authServiceProvider);
+    } else {
+      // show error message
+      setState(() {
+        _errorMessage = 'No internet connection detected. You will not be able to login.';
+      });
+    }
+
   }
 
   Future<void> _login() async {
@@ -33,7 +55,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      final authService = ref.read(authServiceProvider);
       final user = await authService.signIn(
         _emailController.text.trim(),
         _passwordController.text.trim(),

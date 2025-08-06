@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
 import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
 import 'package:sjlshs_chronos/features/device_management/key_management.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
@@ -74,15 +75,16 @@ class MyApp extends ConsumerWidget {
   }
 }
 
-class QRScannerScreen extends StatefulWidget {
-  const QRScannerScreen({Key? key}) : super(key: key);
+class QRScannerScreen extends ConsumerStatefulWidget {
+  final bool? fromPinEntry;
+  const QRScannerScreen({Key? key, this.fromPinEntry = false}) : super(key: key);
 
   @override
-  State<QRScannerScreen> createState() => _QRScannerScreenState();
+  ConsumerState<QRScannerScreen> createState() => _QRScannerScreenState();
 }
 
-class _QRScannerScreenState extends State<QRScannerScreen> {
-  late Future<String?> _encryptionKeyFuture;
+class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
+  late final Future<String?> _encryptionKeyFuture;
   late final SecretsManager secretsManager;
   
   @override
@@ -114,14 +116,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'QR Scanner',
-      
+      showAppBar: !ref.watch(isOfflineProvider),
+      showBottomNavBar: false,
       body: Column(
         children: [
           Expanded(
             child: FutureBuilder<String?>(
               future: _encryptionKeyFuture,
               builder: (context, snapshot) {
-                print(snapshot.data);
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 } else if (snapshot.hasError) {
@@ -130,6 +132,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   return const Center(child: Text('No encryption key found'));
                 } else {
                   return QRScanner(
+                    encryptionKey: snapshot.data!,
                     onError: _handleError,
                   );
                 }

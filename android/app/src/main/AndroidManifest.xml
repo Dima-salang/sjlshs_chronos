@@ -8,6 +8,7 @@
     <uses-feature android:name="android.hardware.camera.autofocus" />
     
     <application
+        android:enableOnBackInvokedCallback="true"
         android:label="sjlshs_chronos"
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"

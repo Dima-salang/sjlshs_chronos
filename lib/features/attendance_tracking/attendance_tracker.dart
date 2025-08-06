@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +30,7 @@ class QRScanner extends ConsumerStatefulWidget {
   final Function(String)? onError;
   final String? encryptionKey;
 
+
   const QRScanner({
     Key? key,
     this.encryptionKey,
@@ -46,14 +47,16 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   late AnimationController _borderAnimationController;
   late AnimationController _feedbackAnimationController;
   late RecordManager recordManager;
+  Uint8List? key;
 
   ScanState _scanState = ScanState.scanning;
   String _errorMessage = '';
-  String _lastScannedId = '';
-  DateTime? _lastScanTime;
   Student? _scannedStudent;
   String? _studentImagePath;
-  late final Isar isar;
+  bool _isProcessingScan = false;
+  Timer? _debounceTimer;
+
+  late final Isar? isar;
 
   @override
   void initState() {
@@ -61,13 +64,14 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     _initializeController();
     _initializeAnimations();
     _requestPermissions();
+    key = EncryptionUtils.loadEncryptionKey(widget.encryptionKey!);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    isar = ref.watch(isarProvider).value!;
-    recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: isar);
+    isar = ref.watch(isarProvider).value;
+    recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: isar!);
   }
 
   void _initializeController() {
@@ -122,23 +126,26 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   }
 
   Future<void> _handleBarcodeScan(BarcodeCapture capture) async {
-    if (_scanState != ScanState.scanning || capture.barcodes.isEmpty) return;
+    if ( _isProcessingScan || _scanState != ScanState.scanning || capture.barcodes.isEmpty) return;
 
     final barcode = capture.barcodes.first;
     final scannedData = barcode.rawValue;
 
     if (scannedData == null || scannedData.isEmpty) return;
 
-    if (_lastScannedId == scannedData &&
-        _lastScanTime != null &&
-        DateTime.now().difference(_lastScanTime!).inSeconds < 3) {
-      return;
-    }
+
+    // prevent multiple triggers
+    _isProcessingScan = true;
+    _debounceTimer?.cancel();
+
+    _debounceTimer = Timer(const Duration(seconds: 2), () {
+      _isProcessingScan = false;
+    });
+
+
 
     setState(() {
       _scanState = ScanState.processing;
-      _lastScannedId = scannedData;
-      _lastScanTime = DateTime.now();
     });
 
     HapticFeedback.mediumImpact();
@@ -148,7 +155,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
       final scannedDataMap = await _decryptData(scannedData);
       final lrn = scannedDataMap['student_id'];
 
-      final student = await isar.students.filter().lrnEqualTo(lrn).findFirst();
+      final student = await isar!.students.filter().lrnEqualTo(lrn).findFirst();
 
       if (student == null) {
         throw 'Student with LRN $lrn not found';
@@ -177,9 +184,9 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
 
       _feedbackAnimationController.forward();
 
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
-        _feedbackAnimationController.reverse().then((_) {
+        _feedbackAnimationController.reverse().then((_) async {
           setState(() {
             _scanState = ScanState.scanning;
             _scannedStudent = null;
@@ -194,9 +201,9 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
       });
       _feedbackAnimationController.forward();
       HapticFeedback.heavyImpact();
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
-        _feedbackAnimationController.reverse().then((_) {
+        _feedbackAnimationController.reverse().then((_) async {
           setState(() {
             _scanState = ScanState.scanning;
           });
@@ -211,9 +218,8 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
       final nonce = encryptedBytes.sublist(0, 12);
       final tag = encryptedBytes.sublist(12, 28);
       final ciphertext = encryptedBytes.sublist(28);
-      final key = await EncryptionUtils.loadEncryptionKey();
       final cipher = pointycastle.GCMBlockCipher(pointycastle.AESEngine())
-        ..init(false, pointycastle.AEADParameters(pointycastle.KeyParameter(key), 128, nonce, Uint8List(0)));
+        ..init(false, pointycastle.AEADParameters(pointycastle.KeyParameter(key!), 128, nonce, Uint8List(0)));
       final paddedCiphertext = Uint8List(ciphertext.length + tag.length)
         ..setAll(0, ciphertext)
         ..setAll(ciphertext.length, tag);
@@ -230,6 +236,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     _controller.dispose();
     _borderAnimationController.dispose();
     _feedbackAnimationController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 

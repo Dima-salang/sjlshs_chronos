@@ -116,6 +116,16 @@ class AppDrawer extends StatelessWidget {
                 context.push('/admin/accounts');
               },
             ),
+            _buildListTile(
+              context: context,
+              icon: Icons.lock,
+              title: 'Device Configuration',
+              route: '/device-configuration',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/device-configuration');
+              },
+            ),
           
           const Divider(),
           _buildListTile(

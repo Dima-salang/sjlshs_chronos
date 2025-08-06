@@ -80,6 +80,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
       // Sort by timestamp (newest first)
       records.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      print(records);
       
       setState(() {
         _records = records;

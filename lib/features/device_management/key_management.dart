@@ -1,21 +1,21 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class SecretsManager {
   final storage = FlutterSecureStorage();
 
   /// QR SCANNER ENCRYPTION KEY
   Future<void> saveEncryptionKey(String key) async {
-    final keyHash = sha256.convert(utf8.encode(key)).toString();
-    await storage.write(key: 'encryption_key', value: keyHash);
+    await storage.write(key: 'encryption_key', value: key);
   }
 
 
   Future<String?> getEncryptionKey() async {
-    final keyHash = await storage.read(key: 'encryption_key');
-    if (keyHash == null) return null;
-    final key = sha256.convert(utf8.encode(keyHash)).toString();
+    final key = await storage.read(key: 'encryption_key');
+    if (key == null) return null;
+    debugPrint("Retrieved key: $key");
     return key;
   }
 

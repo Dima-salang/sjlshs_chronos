@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sjlshs_chronos/features/device_management/key_management.dart';
-import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 
-class PinEntryScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
+
+class PinEntryScreen extends ConsumerStatefulWidget {
   const PinEntryScreen({super.key});
 
   @override
-  State<PinEntryScreen> createState() => _PinEntryScreenState();
+  ConsumerState<PinEntryScreen> createState() => _PinEntryScreenState();
 }
 
-class _PinEntryScreenState extends State<PinEntryScreen> {
+class _PinEntryScreenState extends ConsumerState<PinEntryScreen> {
   final _pinController = TextEditingController();
   final _secretsManager = SecretsManager();
 
@@ -24,7 +26,10 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
     if (_pinController.text.isNotEmpty) {
       final isValid = await _secretsManager.checkPin(_pinController.text);
       if (isValid) {
-        context.go('/scanner');
+        ref.read(isOfflineProvider.notifier).state = true;
+        if (mounted) {
+          context.go('/scanner', extra: true);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid PIN')),
@@ -39,8 +44,10 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      title: 'Enter PIN',
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Enter PIN'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

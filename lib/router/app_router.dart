@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sjlshs_chronos/features/device_management/device_configuration_screen.dart';
+import 'package:sjlshs_chronos/features/device_management/pin_entry_screen.dart';
 import 'package:sjlshs_chronos/features/student_management/screens/student_management_screen.dart';
 import 'package:sjlshs_chronos/features/student_management/screens/attendance_records_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/login_screen.dart';
@@ -12,13 +14,17 @@ import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.d
 import 'package:sjlshs_chronos/main.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
+import 'package:sjlshs_chronos/features/device_management/key_management.dart';
 
+
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
 
 
 final routerProvider = Provider<GoRouter>((ref) {
   final isarAsync = ref.watch(isarProvider);
   final userAsync = ref.watch(currentUserProvider);
   final userMetadataAsync = ref.watch(userMetadataProvider);
+  final isOffline = ref.watch(isOfflineProvider);
   
   // Show loading screen while checking auth state
   if (userAsync.isLoading || isarAsync.isLoading) {
@@ -52,9 +58,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       
       final isLoggedIn = user != null;
-      final isAuthRoute = state.uri.path == '/login' || state.uri.path == '/register';
+      final isAuthRoute = state.uri.path == '/login' || state.uri.path == '/register' || state.uri.path == '/pin-entry';
       final isVerificationScreen = state.uri.path == '/verification-screen';
       final isError = userAsync.hasError || isarAsync.hasError;
+
+      print("Current state: ${state.uri.path}");
+      print("Is offline: $isOffline");
+      print("Extra: ${state.extra}");
+
+      if (state.uri.path == '/scanner' && state.extra == true) {
+        return '/scanner';
+      }
+
       
       if (isError) {
         print('Error in router state:');
@@ -63,7 +78,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/error';
       }
       
-      if (!isLoggedIn) {
+      if (!isLoggedIn && !isOffline) {
         return isAuthRoute ? null : '/login';
       }
       
@@ -134,7 +149,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/scanner',
         name: 'scanner',
-        builder: (context, state) => const QRScannerScreen(),
+        builder: (context, state) => QRScannerScreen(fromPinEntry: state.extra as bool?),
       ),
       
       // Students management route
@@ -157,6 +172,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'account-verification',
         builder: (context, state) => const AccountVerificationScreen(),
       ),
+
+      // Device management route
+      GoRoute(
+        path: '/pin-entry',
+        name: 'pin-entry',
+        builder: (context, state) => const PinEntryScreen(),
+      ),
+      GoRoute(
+        path: '/device-configuration',
+        name: 'device-configuration',
+        builder: (context, state) => const DeviceConfigurationScreen(),
+      )
     ],
     errorBuilder: (context, state) => const AppScaffold(
       title: 'Page Not Found',

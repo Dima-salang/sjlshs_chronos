@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -27,23 +28,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   @override
-  void initState() async {
+  void initState() {
     super.initState();
-    
+    _checkConnectivity();
+  }
 
-    // check if the internet connection is available
+  Future<void> _checkConnectivity() async {
     final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult != ConnectivityResult.none) {
-      // show error message
-      debugPrint('Internet connection detected');
-      authService = ref.read(authServiceProvider);
-    } else {
-      // show error message
+    if (mounted) {
       setState(() {
-        _errorMessage = 'No internet connection detected. You will not be able to login.';
+        if (connectivityResult == ConnectivityResult.none) {
+          _errorMessage = 'No internet connection. Offline mode available.';
+        } else {
+          _errorMessage = null;
+          authService = ref.read(authServiceProvider);
+        }
       });
     }
-
   }
 
   Future<void> _login() async {
@@ -65,7 +66,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _errorMessage = 'Invalid email or password';
         });
       } else {
-        context.go('/scanner');
+        if (mounted) {
+          ref.read(isOfflineProvider.notifier).state = false;
+          context.go('/scanner');
+        }
       }
 
     } catch (e) {
@@ -195,6 +199,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       context.push('/register');
                     },
                     child: const Text('Create an account'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      context.push('/pin-entry');
+                    },
+                    child: const Text('Unlock with PIN'),
                   ),
                 ],
               ),

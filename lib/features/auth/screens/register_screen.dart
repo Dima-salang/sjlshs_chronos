@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -56,6 +57,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         // Auto navigate to login after a short delay
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
+            ref.read(isOfflineProvider.notifier).state = false;
             context.go('/login');
           }
         });

@@ -510,7 +510,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                     _buildSyncStep(
                       number: 1,
                       title: 'Sync Attendance Records',
-                      description: 'Sync all attendance records to the server',
+                      description: 'Sync all attendance records to the server per tablet.',
                       icon: Icons.people,
                       onTap: _syncPresences,
                       isSyncing: _isSyncing && _syncMessage?.contains('records') == true,

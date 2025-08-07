@@ -159,6 +159,42 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     }
   }
 
+  Future<void> _syncPresences() async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isSyncing = true;
+      _syncMessage = 'Syncing attendance records...';
+      _syncSuccess = false;
+    });
+
+    try {
+      await _recordManager.syncPresences();
+      setState(() {
+        _syncMessage = 'Attendance records synced successfully!';
+        _syncSuccess = true;
+      });
+    } catch (e) {
+      debugPrint('Error syncing attendance records: $e');
+      setState(() {
+        _syncMessage = 'Failed to sync attendance records: ${e.toString()}';
+        _syncSuccess = false;
+      });
+    } finally {
+      setState(() {
+        _isSyncing = false;
+      });
+      
+      // Clear the message after 5 seconds
+      await Future.delayed(const Duration(seconds: 5));
+      if (mounted) {
+        setState(() {
+          _syncMessage = null;
+        });
+      }
+    }
+  }
+
   Future<void> _loadSyncStatus() async {
     if (_isLoadingSyncStatus) return;
     
@@ -356,7 +392,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       label: Text(_isSyncing ? 'Syncing...' : 'Sync Records'),
                       onPressed: _isSyncing ? null : _syncAbsences,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
                       ),
                     ),
                   ),
@@ -457,9 +493,55 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   Widget _buildRecordsTab() {
     return Column(
       children: [
+        // Sync Instructions Card
+        Card(
+          margin: const EdgeInsets.all(12),
+          elevation: 2,
+          child: ExpansionTile(
+            leading: const Icon(Icons.sync, color: Colors.blue),
+            title: const Text('Sync Instructions', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('Click to view steps for syncing attendance data'),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSyncStep(
+                      number: 1,
+                      title: 'Sync Attendance Records',
+                      description: 'Sync all attendance records to the server',
+                      icon: Icons.people,
+                      onTap: _syncPresences,
+                      isSyncing: _isSyncing && _syncMessage?.contains('records') == true,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSyncStep(
+                      number: 2,
+                      title: 'Sync Absences',
+                      description: 'After syncing records, sync absences',
+                      icon: Icons.calendar_today,
+                      onTap: _syncAbsences,
+                      isSyncing: _isSyncing && _syncMessage?.contains('absences') == true,
+                    ),
+                    const SizedBox(height: 8),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text(
+                        '• Always sync attendance records before absences\n• Ensure you have a stable internet connection\n• Sync regularly to keep data up to date',
+                        style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
         // Date selector and search bar
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
             children: [
               // Date selector and sync button row
@@ -500,7 +582,6 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
               // Search bar
               TextField(
                 decoration: InputDecoration(
@@ -630,6 +711,57 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           ),
           Expanded(child: Text(value)),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildSyncStep({
+    required int number,
+    required String title,
+    required String description,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isSyncing = false,
+  }) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ListTile(
+        leading: Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              '$number',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).primaryColor,
+              ),
+            ),
+          ),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Text(description, style: const TextStyle(fontSize: 13)),
+        trailing: isSyncing
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : IconButton(
+                icon: const Icon(Icons.sync, size: 20),
+                onPressed: onTap,
+                tooltip: 'Sync $title',
+              ),
+        onTap: isSyncing ? null : onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       ),
     );
   }

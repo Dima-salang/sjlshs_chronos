@@ -44,34 +44,57 @@ class RecordManager {
   }
 
   // syncs absences to firestore based on the present records of students
-  Future<void> syncAbsences() async {
+  Future<void> syncPresences() async {
     final now = DateTime.now();
-    final lastSync = await getLastSyncDate() ?? now.subtract(Duration(days: 1)); // fallback
+    final lastSync = await getLastSyncDate('presences') ?? now.subtract(Duration(days: 1)); // fallback
     
     // check if last sync is in the past
     if (lastSync.isAfter(now)) {
       throw Exception('Last sync is in the future');
     }
 
-    // for every student in isar, get their lrn
-    final students = await isar.students.where().findAll();
-    for (var student in students) {
-      // get absences of the student
-      final absences = await getAbsentDaysForStudent(
-        lrn: student.lrn,
-        start: DateTime(lastSync.year, lastSync.month, lastSync.day),
-        end: DateTime(now.year, now.month, now.day),
-      );
-      print(absences);
-      try {
-        await writeAbsencesToFirestore(absences, student);
-      } catch (e) {
-        logger.e('Error writing absences to Firestore: $e');
-        throw Exception('Error writing absences to Firestore: $e');
-      }
-    }
-    await setLastSyncDate(now); // ✅ Set last sync
+
+    final attendance_records = await isar.attendanceRecords
+        .filter()
+        .timestampBetween(
+          DateTime(lastSync.year, lastSync.month, lastSync.day),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        )
+        .findAll();
+
+    await writePresencesToFirestore(attendance_records);
+
+    
+
+    
+
+    
+    await setLastSyncDate(now, 'presences'); // ✅ Set last sync
   }
+
+  // write presences to firestore
+  Future<void> writePresencesToFirestore(List<AttendanceRecord> records) async {
+    final batch = firestore?.batch();
+    for (var i = 0; i < records.length; i += 500) {
+      final chunk = records.sublist(i, (i + 500).clamp(0, records.length));
+      for (AttendanceRecord record in chunk) {
+        final docID = '${record.lrn}_${record.timestamp.toIso8601String().substring(0,10)}';
+        final docRef = firestore?.collection('attendance').doc(docID);
+        final data = {
+        'lrn': record.lrn,
+        'firstName': record.firstName,
+        'lastName': record.lastName,
+        'studentYear': record.studentYear,
+        'studentSection': record.studentSection,
+        'timestamp': record.timestamp,
+        'isAbsent': false,
+      };
+      batch?.set(docRef!, data, SetOptions(merge: true));
+    }
+    await batch?.commit();
+}
+
+}
 
   // write absences to firestore
   Future<void> writeAbsencesToFirestore(List<DateTime> absences, Student student) async {
@@ -97,23 +120,54 @@ class RecordManager {
 
   }
 
+  // sync present records to firestore
+  Future<void> syncAbsences() async {
+    final now = DateTime.now();
+    final lastSync = await getLastSyncDate('absences') ?? now.subtract(Duration(days: 1)); // fallback
+    
+    // check if last sync is in the past
+    if (lastSync.isAfter(now)) {
+      throw Exception('Last sync is in the future');
+    }
+
+    // for every student in isar, get their lrn
+    final students = await isar.students.where().findAll();
+    for (var student in students) {
+      // get absences of the student
+      final absences = await getAbsentDaysForStudent(
+        lrn: student.lrn,
+        start: DateTime(lastSync.year, lastSync.month, lastSync.day),
+        end: DateTime(now.year, now.month, now.day, 23, 59, 59),
+      );
+      print(absences);
+      try {
+        await writeAbsencesToFirestore(absences, student);
+      } catch (e) {
+        logger.e('Error writing absences to Firestore: $e');
+        throw Exception('Error writing absences to Firestore: $e');
+      }
+    }
+    await setLastSyncDate(now, 'absences'); // ✅ Set last sync
+  }
 
 
-  Future<DateTime?> getLastSyncDate() async {
+
+  Future<DateTime?> getLastSyncDate(String type) async {
     final prefs = await SharedPreferences.getInstance();
-    final millis = prefs.getInt('last_sync_timestamp');
+    final millis = prefs.getInt('last_sync_timestamp_$type');
     return millis != null ? DateTime.fromMillisecondsSinceEpoch(millis) : null;
   }
 
-  Future<void> setLastSyncDate(DateTime date) async {
+  Future<void> setLastSyncDate(DateTime date, String type) async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_sync_timestamp', date.millisecondsSinceEpoch);
+      await prefs.setInt('last_sync_timestamp_$type', date.millisecondsSinceEpoch);
 
       // commit sync to firestore
       final deviceID = await getDeviceID();
       await firestore?.collection('devices').doc(deviceID).set(
         {
         'lastSync': date,
+        'type': type,
       }, SetOptions(merge: true));
   }
 
@@ -129,7 +183,7 @@ Future<List<Map<String, dynamic>>> getAbsencesFromFirestore({
     print(section);
     var query = firestore
         ?.collection('attendance')
-        .where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end);
+        .where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end).where('isAbsent', isEqualTo: true);
     
     // Only add the section filter if it's not null
     if (section != null) {
@@ -140,7 +194,19 @@ Future<List<Map<String, dynamic>>> getAbsencesFromFirestore({
     query = query?.orderBy('timestamp', descending: true);
     
     final absences = await query?.get();
-    return absences?.docs.map((doc) => doc.data()).toList() ?? [];
+
+    // ensure that absences are unique per student per day
+    final uniqueAbsences = <String, Map<String, dynamic>>{};
+    for (final absence in absences?.docs ?? []) {
+      final lrn = absence.data()['lrn'];
+      final date = absence.data()['timestamp'].toDate();
+      final key = '${lrn}_${date.toIso8601String().substring(0, 10)}';
+      if (!uniqueAbsences.containsKey(key)) {
+        uniqueAbsences[key] = absence.data();
+      }
+    }
+
+    return uniqueAbsences.values.toList();
   } catch (e) {
     logger.e('Error getting absences from Firestore: $e');
     throw Exception('Error getting absences from Firestore: $e');
@@ -179,18 +245,11 @@ Future<String?> getStudentImagePath(String lrn) async {
     required DateTime start,
     required DateTime end,
   }) async {
-    final records = await isar.attendanceRecords
-        .filter()
-        .lrnEqualTo(lrn)
-        .timestampBetween(
-          DateTime(start.year, start.month, start.day),
-          DateTime(end.year, end.month, end.day, 23, 59, 59),
-        )
-        .findAll();
-
-    return records
+    final records = await firestore?.collection('attendance').where('lrn', isEqualTo: lrn).where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end).where('isAbsent', isEqualTo: false).get();
+    
+    return records!.docs
         .map((r) =>
-            DateTime(r.timestamp.year, r.timestamp.month, r.timestamp.day))
+            DateTime(r.data()['timestamp'].toDate().year, r.data()['timestamp'].toDate().month, r.data()['timestamp'].toDate().day))
         .toSet();
   }
 
@@ -205,12 +264,13 @@ Future<String?> getStudentImagePath(String lrn) async {
       final presentDays =
           await getPresentDays(lrn: lrn, start: start, end: end);
 
-      return validDays.where((day) => !presentDays.contains(day)).toList();
+    return validDays.where((day) => !presentDays.contains(day)).toList();
     } catch (e) {
       logger.e('Error getting absent days for $lrn: $e');
       throw Exception('Error getting absent days for $lrn: $e');
     }
   }
+
   
 
 

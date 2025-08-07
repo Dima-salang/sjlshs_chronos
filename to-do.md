@@ -30,3 +30,5 @@ TO-DO
 
 TO-DO
 - ensure that only unique absences are recorded per student per day even if multiple present records are present in different tablet.
+- improve ui with sjlshs logo
+- settings for dark mode and light mode

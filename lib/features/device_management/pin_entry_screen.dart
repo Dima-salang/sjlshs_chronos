@@ -27,6 +27,7 @@ class _PinEntryScreenState extends ConsumerState<PinEntryScreen> {
       final isValid = await _secretsManager.checkPin(_pinController.text);
       if (isValid) {
         ref.read(isOfflineProvider.notifier).state = true;
+        await Future.delayed(const Duration(seconds: 2));
         if (mounted) {
           context.go('/scanner', extra: true);
         }

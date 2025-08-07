@@ -17,6 +17,7 @@ import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:go_router/go_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,35 +113,118 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AppScaffold(
-      title: 'QR Scanner',
-      showAppBar: !ref.watch(isOfflineProvider),
-      showBottomNavBar: false,
-      body: Column(
-        children: [
-          Expanded(
-            child: FutureBuilder<String?>(
-              future: _encryptionKeyFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error loading encryption key: ${snapshot.error}'));
-                } else if (snapshot.data == null) {
-                  return const Center(child: Text('No encryption key found'));
+  Future<void> _showPinVerification(BuildContext context) async {
+    final pinController = TextEditingController();
+    final secretsManager = SecretsManager();
+    bool isValidPin = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter PIN to Continue'),
+        content: TextField(
+          controller: pinController,
+          decoration: const InputDecoration(
+            labelText: 'PIN',
+            hintText: 'Enter your PIN',
+            border: OutlineInputBorder(),
+          ),
+          obscureText: true,
+          keyboardType: TextInputType.text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 20, letterSpacing: 2.0),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (pinController.text.isNotEmpty) {
+                final isValid = await secretsManager.checkPin(pinController.text);
+                if (isValid && mounted) {
+                  isValidPin = true;
+                  Navigator.of(context).pop();
                 } else {
-                  return QRScanner(
-                    encryptionKey: snapshot.data!,
-                    onError: _handleError,
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Invalid PIN')),
                   );
                 }
-              },
-            ),
+              }
+            },
+            child: const Text('Verify'),
           ),
         ],
       ),
+    );
+
+    if (isValidPin && mounted) {
+      GoRouter.of(context).go('/login');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isOffline = ref.watch(isOfflineProvider);
+    
+    return Stack(
+      children: [
+        AppScaffold(
+          title: 'QR Scanner',
+          showAppBar: !isOffline,
+          showBottomNavBar: false,
+          body: Column(
+            children: [
+              Expanded(
+                child: FutureBuilder<String?>(
+                  future: _encryptionKeyFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    } else if (snapshot.hasError) {
+                      return Center(child: Text('Error loading encryption key: ${snapshot.error}'));
+                    } else if (snapshot.data == null) {
+                      return const Center(child: Text('No encryption key found'));
+                    } else {
+                      return QRScanner(
+                        encryptionKey: snapshot.data!,
+                        onError: _handleError,
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isOffline)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 8,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                icon: Icon(Icons.arrow_back_rounded),
+                onPressed: () => _showPinVerification(context),
+                tooltip: 'Back to Login',
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

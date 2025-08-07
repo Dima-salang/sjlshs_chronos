@@ -87,6 +87,7 @@ class QRScannerScreen extends ConsumerStatefulWidget {
 class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   late final Future<String?> _encryptionKeyFuture;
   late final SecretsManager secretsManager;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   @override
   void initState() {
@@ -113,59 +114,6 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     super.dispose();
   }
 
-  Future<void> _showPinVerification(BuildContext context) async {
-    final pinController = TextEditingController();
-    final secretsManager = SecretsManager();
-    bool isValidPin = false;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Enter PIN to Continue'),
-        content: TextField(
-          controller: pinController,
-          decoration: const InputDecoration(
-            labelText: 'PIN',
-            hintText: 'Enter your PIN',
-            border: OutlineInputBorder(),
-          ),
-          obscureText: true,
-          keyboardType: TextInputType.text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 20, letterSpacing: 2.0),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (pinController.text.isNotEmpty) {
-                final isValid = await secretsManager.checkPin(pinController.text);
-                if (isValid && mounted) {
-                  isValidPin = true;
-                  Navigator.of(context).pop();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invalid PIN')),
-                  );
-                }
-              }
-            },
-            child: const Text('Verify'),
-          ),
-        ],
-      ),
-    );
-
-    if (isValidPin && mounted) {
-      GoRouter.of(context).go('/login');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -174,8 +122,8 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     return Stack(
       children: [
         AppScaffold(
+          scaffoldKey: _scaffoldKey,
           title: 'QR Scanner',
-          showAppBar: !isOffline,
           showBottomNavBar: false,
           body: Column(
             children: [
@@ -201,29 +149,6 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
             ],
           ),
         ),
-        if (isOffline)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 8,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                icon: Icon(Icons.arrow_back_rounded),
-                onPressed: () => _showPinVerification(context),
-                tooltip: 'Back to Login',
-              ),
-            ),
-          ),
       ],
     );
   }

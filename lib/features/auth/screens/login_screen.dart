@@ -66,8 +66,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _errorMessage = 'Invalid email or password';
         });
       } else {
+        ref.read(isOfflineProvider.notifier).state = false;
+        await Future.delayed(const Duration(seconds: 2));
         if (mounted) {
-          ref.read(isOfflineProvider.notifier).state = false;
           context.go('/scanner');
         }
       }

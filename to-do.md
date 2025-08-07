@@ -18,11 +18,15 @@ TO-DO
 - local storage with Isar - DONE
 - new students update using excel - DONE
 - sync records - DONE
-- UI for scanning
-- Auth
-- get images
-- resolve absences from last sync to current time
-- resolve presences from online for teachers
-- report generation
-- admin dashboard
-- scanning mode security
+- UI for scanning - DONE
+- Auth - DONE
+- get images - DONE
+- resolve absences from last sync to current time - DONE
+- resolve presences from online for teachers - DONE
+- report generation - DONE
+- admin dashboard - DONE
+- scanning mode security - DONE
+
+
+TO-DO
+- ensure that only unique absences are recorded per student per day even if multiple present records are present in different tablet.

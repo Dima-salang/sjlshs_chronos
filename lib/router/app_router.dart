@@ -66,6 +66,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       print("Is offline: $isOffline");
       print("Extra: ${state.extra}");
 
+
+      if (isOffline) {
+        return null;
+      }
+
       if (state.uri.path == '/scanner' && state.extra == true) {
         return '/scanner';
       }
@@ -86,7 +91,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isVerified = userMetadata?.isVerified ?? false;
       
       // If user is not verified and not already on verification screen, redirect
-      if (!isVerified && !isVerificationScreen && !isAuthRoute) {
+      if (!isOffline && !isVerified && !isVerificationScreen && !isAuthRoute) {
         return '/verification-screen';
       }
       
@@ -104,7 +109,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/scanner';
       }
 
-      return null;
     },
     routes: [
       // Auth routes

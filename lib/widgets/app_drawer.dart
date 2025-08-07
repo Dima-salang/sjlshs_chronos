@@ -1,16 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sjlshs_chronos/features/auth/auth_service.dart';
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
+import 'package:sjlshs_chronos/features/device_management/key_management.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends ConsumerWidget {
   const AppDrawer({Key? key}) : super(key: key);
 
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final currentRoute = GoRouterState.of(context).matchedLocation;
+    final isOffline = ref.watch(isOfflineProvider);
+    print("isOffline in app drawer: $isOffline");
 
     return Drawer(
       child: ListView(
@@ -43,57 +48,49 @@ class AppDrawer extends StatelessWidget {
               ],
             ),
           ),
-          _buildListTile(
-            context: context,
-            icon: Icons.home,
-            title: 'Home',
-            route: '/',
-            currentRoute: currentRoute,
-            onTap: () {
-              context.push('/');
-            },
-          ),
-          _buildListTile(
-            context: context,
-            icon: Icons.qr_code_scanner,
-            title: 'QR Scanner',
-            route: '/scanner',
-            currentRoute: currentRoute,
-            onTap: () {
-              context.push('/scanner');
-            },
-          ),
-          _buildListTile(
-            context: context,
-            icon: Icons.people,
-            title: 'Student Management',
-            route: '/students',
-            currentRoute: currentRoute,
-            onTap: () {
-              context.push('/students');
-            },
-          ),
-          _buildListTile(
-            context: context,
-            icon: Icons.assignment,
-            title: 'Attendance Records',
-            route: '/attendance',
-            currentRoute: currentRoute,
-            onTap: () {
-              context.push('/attendance');
-            },
-          ),
-          _buildListTile(
-            context: context,
-            icon: Icons.assignment,
-            title: 'Teacher Attendance',
-            route: '/teacher-attendance',
-            currentRoute: currentRoute,
-            onTap: () {
-              context.push('/teacher-attendance');
-            },
-          ),
-          
+
+          // Only show these items when online
+          if (!isOffline) ...[
+            _buildListTile(
+              context: context,
+              icon: Icons.qr_code_scanner,
+              title: 'QR Scanner',
+              route: '/scanner',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/scanner');
+              },
+            ),
+            _buildListTile(
+              context: context,
+              icon: Icons.people,
+              title: 'Student Management',
+              route: '/students',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/students');
+              },
+            ),
+            _buildListTile(
+              context: context,
+              icon: Icons.assignment,
+              title: 'Attendance Records',
+              route: '/attendance',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/attendance');
+              },
+            ),
+            _buildListTile(
+              context: context,
+              icon: Icons.assignment,
+              title: 'Teacher Attendance',
+              route: '/teacher-attendance',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/teacher-attendance');
+              },
+            ),
             const Divider(),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -126,7 +123,6 @@ class AppDrawer extends StatelessWidget {
                 context.push('/device-configuration');
               },
             ),
-          
           const Divider(),
           _buildListTile(
             context: context,
@@ -149,6 +145,31 @@ class AppDrawer extends StatelessWidget {
               context.push('/login');
             },
           ),
+          ] else ...[
+            _buildListTile(
+              context: context,
+              icon: Icons.qr_code_scanner,
+              title: 'QR Scanner',
+              route: '/scanner',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/scanner');
+              },
+            ),
+            // redirect to login
+            _buildListTile(
+              context: context,
+              icon: Icons.logout,
+              title: 'Logout',
+              route: '/login',
+              currentRoute: currentRoute,
+              onTap: () async {
+                context.go('/login');
+              },
+            ),
+          ],
+
+          // Show these items in both modes
         ],
       ),
     );
@@ -184,4 +205,7 @@ class AppDrawer extends StatelessWidget {
       },
     );
   }
+
+
+
 }

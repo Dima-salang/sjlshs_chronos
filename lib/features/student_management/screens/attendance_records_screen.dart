@@ -32,8 +32,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   bool _isLoading = false;
   bool _isSyncing = false;
   String _searchQuery = '';
-  String? _syncMessage;
-  bool _syncSuccess = false;
+  String _syncProgressMessage = '';
   int _selectedTabIndex = 0;
   DateTimeRange _reportDateRange = DateTimeRange(
     start: DateTime.now().subtract(const Duration(days: 7)),
@@ -123,74 +122,80 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     }).toList();
   }
 
-  Future<void> _syncAbsences() async {
-    if (_isSyncing) return;
-
-    setState(() {
-      _isSyncing = true;
-      _syncMessage = 'Syncing absences...';
-      _syncSuccess = false;
-    });
-
-    try {
-      await _recordManager.syncAbsences();
-      setState(() {
-        _syncMessage = 'Absences synced successfully!';
-        _syncSuccess = true;
-      });
-    } catch (e) {
-      debugPrint('Error syncing absences: $e');
-      setState(() {
-        _syncMessage = 'Failed to sync absences: ${e.toString()}';
-        _syncSuccess = false;
-      });
-    } finally {
-      setState(() {
-        _isSyncing = false;
-      });
-      
-      // Clear the message after 5 seconds
-      await Future.delayed(const Duration(seconds: 5));
-      if (mounted) {
-        setState(() {
-          _syncMessage = null;
-        });
-      }
-    }
-  }
-
   Future<void> _syncPresences() async {
     if (_isSyncing) return;
 
     setState(() {
       _isSyncing = true;
-      _syncMessage = 'Syncing attendance records...';
-      _syncSuccess = false;
+      _syncProgressMessage = 'Syncing attendance records...';
     });
 
     try {
       await _recordManager.syncPresences();
-      setState(() {
-        _syncMessage = 'Attendance records synced successfully!';
-        _syncSuccess = true;
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Attendance records synced successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint('Error syncing attendance records: $e');
-      setState(() {
-        _syncMessage = 'Failed to sync attendance records: ${e.toString()}';
-        _syncSuccess = false;
-      });
+      debugPrint('Error syncing presences: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sync attendance records: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isSyncing = false;
-      });
-      
-      // Clear the message after 5 seconds
-      await Future.delayed(const Duration(seconds: 5));
       if (mounted) {
         setState(() {
-          _syncMessage = null;
+          _isSyncing = false;
+          _syncProgressMessage = '';
         });
+        _loadSyncStatus();
+      }
+    }
+  }
+
+  Future<void> _syncAbsences() async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isSyncing = true;
+      _syncProgressMessage = 'Syncing absences...';
+    });
+
+    try {
+      await _recordManager.syncAbsences();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Absences synced successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error syncing absences: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sync absences: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _syncProgressMessage = '';
+        });
+        _loadSyncStatus();
       }
     }
   }
@@ -263,7 +268,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
         logger: logger,
       );
 
-      final fileName = 'attendance_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+      final fileName = 'attendance_report_${DateFormat('''yyyyMMdd_HHmmss''').format(DateTime.now())}.xlsx';
       final filePath = '$outputDirectory/$fileName';
 
       // 2. Generate the report
@@ -369,196 +374,230 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   }
 
   Widget _buildSyncStatusTab() {
-    return Column(
-      children: [
-        // Sync Instructions Card
-        Card(
-          margin: const EdgeInsets.all(12),
-          elevation: 2,
-          child: ExpansionTile(
-            title: const Text(
-              'Sync Instructions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSyncCard(),
+          const SizedBox(height: 24),
+          _buildDeviceStatusHeader(),
+          const SizedBox(height: 8),
+          _buildDeviceStatusList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSyncCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Data Synchronization',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            children: [
+            const SizedBox(height: 12),
+            Text(
+              'Sync attendance records first, then sync absences to keep your local data up-to-date with the central server.',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 24),
+            if (_isSyncing)
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Row(
-                    children: [
-                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Sync Instructions',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    _syncProgressMessage,
+                    style: TextStyle(
+                      fontStyle: FontStyle.italic,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  '1. Sync attendance records first. Ensure \n2. Then sync absences\n3. Ensure stable internet connection',
-                  style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.8),
-                ),
-                const SizedBox(height: 16),
-                // Sync Records Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: _isSyncing && _syncMessage != null && _syncMessage!.contains('records')
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.sync, size: 20),
-                    label: Text(_isSyncing && _syncMessage != null && _syncMessage!.contains('records') ? 'Syncing...' : 'Sync Records'),
-                    onPressed: _isSyncing && _syncMessage != null && _syncMessage!.contains('records') ? null : _syncPresences,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Sync Absences Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: _isSyncing && _syncMessage != null && _syncMessage!.contains('absences')
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.sync, size: 20),
-                    label: Text(_isSyncing && _syncMessage != null && _syncMessage!.contains('absences') ? 'Syncing...' : 'Sync Absences'),
-                    onPressed: _isSyncing && _syncMessage != null && _syncMessage!.contains('absences') ? null : _syncAbsences,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: Colors.blue[50],
-                      foregroundColor: Colors.blue[800],
-                    ),
-                  ),
-                ),
-              ],  
-            ) ,
-      ]),
-        ),
-        // Sync button and status
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                ],
+              )
+            else
+              Column(
                 children: [
-                  // Sync button
-                  Expanded(
+                  SizedBox(
+                    width: double.infinity,
                     child: ElevatedButton.icon(
-                      icon: _isSyncing
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.sync, size: 20),
-                      label: Text(_isSyncing ? 'Syncing...' : 'Sync Records'),
-                      onPressed: _isSyncing ? null : _syncAbsences,
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+                      label: const Text('Sync Attendance Records'),
+                      onPressed: _isSyncing ? null : _syncPresences,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // Refresh button
-                  IconButton(
-                    icon: _isLoadingSyncStatus
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh, size: 24),
-                    onPressed: _isLoadingSyncStatus ? null : _loadSyncStatus,
-                    tooltip: 'Refresh sync status',
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+                      label: const Text('Sync Absences'),
+                      onPressed: _isSyncing ? null : _syncAbsences,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              if (_syncMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _syncMessage!,
-                  style: TextStyle(
-                    color: _syncSuccess ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeviceStatusHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Device Sync Status',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        IconButton(
+          icon: _isLoadingSyncStatus
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.refresh),
+          onPressed: _isLoadingSyncStatus ? null : _loadSyncStatus,
+          tooltip: 'Refresh sync status',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeviceStatusList() {
+    if (_isLoadingSyncStatus && _syncStatusList.isEmpty) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: CircularProgressIndicator(),
+      ));
+    }
+
+    if (_syncStatusList.isEmpty) {
+      return Card(
+        elevation: 0,
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.sync_problem, size: 48, color: Colors.grey.shade600),
+              const SizedBox(height: 16),
+              const Text(
+                'No sync data available',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tap the refresh button or perform a sync to see device statuses.',
+                style: TextStyle(color: Colors.grey.shade700),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
-        
-        // Devices sync status list
-        Expanded(
-          child: _isLoadingSyncStatus
-              ? const Center(child: CircularProgressIndicator())
-              : _syncStatusList.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.sync_problem, size: 48, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text(
-                            'No sync data available',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _syncStatusList.length,
-                      itemBuilder: (context, index) {
-                        final device = _syncStatusList[index];
-                        final lastSync = device['lastSync'] as DateTime?;
-                        final isThisDevice = device['isThisDevice'] as bool;
-                        
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          color: isThisDevice ? Theme.of(context).colorScheme.primaryContainer : null,
-                          child: ListTile(
-                            leading: Icon(
-                              isThisDevice ? Icons.phone_android : Icons.device_unknown,
-                              color: isThisDevice ? Theme.of(context).colorScheme.primary : null,
-                            ),
-                            title: Text(
-                              '${device['deviceId']} ${isThisDevice ? '(This Device)' : ''}',
-                              style: TextStyle(
-                                fontWeight: isThisDevice ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                            subtitle: Text(
-                              lastSync != null
-                                  ? 'Last sync: ${DateFormat('MMM d, y hh:mm a').format(lastSync)}'
-                                  : 'Never synced',
-                            ),
-                            trailing: lastSync != null
-                                ? Text(
-                                    '${DateTime.now().difference(lastSync).inHours < 24 ? 'Today' : '${DateTime.now().difference(lastSync).inDays} days ago'}',
-                                    style: TextStyle(
-                                      color: DateTime.now().difference(lastSync).inDays > 7
-                                          ? Colors.red
-                                          : Colors.green,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
-        ),
-      ],
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _syncStatusList.length,
+      itemBuilder: (context, index) {
+        final device = _syncStatusList[index];
+        final lastSync = device['lastSync'] as DateTime?;
+        final isThisDevice = device['isThisDevice'] as bool;
+        final now = DateTime.now();
+        final difference = lastSync != null ? now.difference(lastSync) : null;
+
+        String lastSyncString;
+        if (difference == null) {
+          lastSyncString = 'Never';
+        } else if (difference.inMinutes < 1) {
+          lastSyncString = 'Just now';
+        } else if (difference.inMinutes < 60) {
+          lastSyncString = '${difference.inMinutes}m ago';
+        } else if (difference.inHours < 24) {
+          lastSyncString = '${difference.inHours}h ago';
+        } else {
+          lastSyncString = '${difference.inDays}d ago';
+        }
+
+        Color statusColor = Colors.grey;
+        if (difference != null) {
+          if (difference.inDays > 7) {
+            statusColor = Colors.red;
+          } else if (difference.inDays > 1) {
+            statusColor = Colors.orange;
+          } else {
+            statusColor = Colors.green;
+          }
+        }
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          shape: RoundedRectangleBorder(
+            side: isThisDevice 
+                ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)
+                : BorderSide(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(12.0),
+          ),
+          child: ListTile(
+            leading: Icon(
+              isThisDevice ? Icons.phone_android : Icons.device_unknown,
+              color: isThisDevice
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.grey.shade600,
+            ),
+            title: Text(
+              '${device['deviceId']} ${isThisDevice ? '''(This Device)''' : ''}',
+              style: TextStyle(
+                fontWeight: isThisDevice ? FontWeight.bold : FontWeight.normal,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              lastSync != null
+                  ? 'Synced: ${DateFormat('''MMM d, hh:mm a''').format(lastSync)}'
+                  : 'Never synced',
+            ),
+            trailing: Chip(
+              avatar: Icon(Icons.circle, color: statusColor, size: 12),
+              label: Text(lastSyncString),
+              backgroundColor: statusColor.withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: statusColor.withOpacity(0.2)),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -591,7 +630,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                         TextButton(
                           onPressed: () => _selectDate(context),
                           child: Text(
-                            DateFormat('MMMM d, y').format(_selectedDate),
+                            DateFormat('''MMMM d, y''').format(_selectedDate),
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                         ),
@@ -641,7 +680,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                           const Icon(Icons.assignment_outlined, size: 64, color: Colors.grey),
                           const SizedBox(height: 16),
                           Text(
-                            'No attendance records found\nfor ${DateFormat('MMMM d, y').format(_selectedDate)}',
+                            'No attendance records found\nfor ${DateFormat('''MMMM d, y''').format(_selectedDate)}',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   color: Colors.grey,
@@ -680,7 +719,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
             Text('${record.studentSection} • ${record.studentYear}'),
             const SizedBox(height: 4),
             Text(
-              'Time: ${DateFormat('h:mm a').format(record.timestamp)}',
+              'Time: ${DateFormat('''h:mm a''').format(record.timestamp)}',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -711,8 +750,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               _buildDetailRow('LRN', record.lrn),
               _buildDetailRow('Grade & Section', '${record.studentYear} - ${record.studentSection}'),
               _buildDetailRow('Status', record.isPresent ? 'Present' : 'Absent'),
-              _buildDetailRow('Date', DateFormat('MMMM d, y').format(record.timestamp)),
-              _buildDetailRow('Time', DateFormat('h:mm a').format(record.timestamp)),
+              _buildDetailRow('Date', DateFormat('''MMMM d, y''').format(record.timestamp)),
+              _buildDetailRow('Time', DateFormat('''h:mm a''').format(record.timestamp)),
             ],
           ),
         ),
@@ -798,7 +837,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                     const LinearProgressIndicator(),
                     const SizedBox(height: 8),
                     const Text(
-                      'Generating report. This may take a moment...',
+                      'Generating report. This may take a moment...', 
                       textAlign: TextAlign.center,
                       style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
                     ),
@@ -830,9 +869,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                   ),
                   SizedBox(height: 12),
                   Text(
-                    '1. Select the date range for the report.\n'
-                    '2. Click \'Generate & Save Report\'.\n'
-                    '3. Choose a directory to save the Excel file to.\n'
+                    '1. Select the date range for the report.\n' 
+                    '2. Click \'Generate & Save Report\'.\n' 
+                    '3. Choose a directory to save the Excel file to.\n' 
                     '4. The report will be generated and you will be notified upon completion.',
                     style: TextStyle(fontSize: 14, height: 1.5),
                   ),
@@ -871,7 +910,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                     const Icon(Icons.calendar_today, size: 20, color: Colors.grey),
                     const SizedBox(width: 12),
                     Text(
-                      '${DateFormat('MMM d, y').format(_reportDateRange.start)} - ${DateFormat('MMM d, y').format(_reportDateRange.end)}',
+                      '${DateFormat('''MMM d, y''').format(_reportDateRange.start)} - ${DateFormat('''MMM d, y''').format(_reportDateRange.end)}',
                       style: const TextStyle(fontSize: 16),
                     ),
                   ],

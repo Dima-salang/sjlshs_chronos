@@ -118,38 +118,31 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   @override
   Widget build(BuildContext context) {
     final isOffline = ref.watch(isOfflineProvider);
-    
-    return Stack(
-      children: [
-        AppScaffold(
-          scaffoldKey: _scaffoldKey,
-          title: 'QR Scanner',
-          showBottomNavBar: false,
-          body: Column(
-            children: [
-              Expanded(
-                child: FutureBuilder<String?>(
-                  future: _encryptionKeyFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    } else if (snapshot.hasError) {
-                      return Center(child: Text('Error loading encryption key: ${snapshot.error}'));
-                    } else if (snapshot.data == null) {
-                      return const Center(child: Text('No encryption key found'));
-                    } else {
-                      return QRScanner(
-                        encryptionKey: snapshot.data!,
-                        onError: _handleError,
-                      );
-                    }
-                  },
-                ),
+
+    return AppScaffold(
+      scaffoldKey: _scaffoldKey,
+      title: 'QR Scanner',
+      showBottomNavBar: false,
+      body: FutureBuilder<String?>(
+        future: _encryptionKeyFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (!snapshot.hasData || snapshot.data == null) {
+            return const Center(child: Text('Encryption key not available.'));
+          } else {
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: QRScanner(
+                encryptionKey: snapshot.data!,
+                onError: _handleError,
               ),
-            ],
-          ),
-        ),
-      ],
+            );
+          }
+        },
+      ),
     );
   }
 }

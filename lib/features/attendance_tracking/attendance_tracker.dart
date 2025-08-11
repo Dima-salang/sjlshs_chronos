@@ -54,7 +54,6 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   Student? _scannedStudent;
   String? _studentImagePath;
   bool _isProcessingScan = false;
-  Timer? _debounceTimer;
 
   late final Isar? isar;
 
@@ -126,23 +125,14 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   }
 
   Future<void> _handleBarcodeScan(BarcodeCapture capture) async {
-    if ( _isProcessingScan || _scanState != ScanState.scanning || capture.barcodes.isEmpty) return;
+    if (_isProcessingScan || _scanState != ScanState.scanning || capture.barcodes.isEmpty) return;
 
     final barcode = capture.barcodes.first;
     final scannedData = barcode.rawValue;
 
     if (scannedData == null || scannedData.isEmpty) return;
 
-
-    // prevent multiple triggers
     _isProcessingScan = true;
-    _debounceTimer?.cancel();
-
-    _debounceTimer = Timer(const Duration(seconds: 2), () {
-      _isProcessingScan = false;
-    });
-
-
 
     setState(() {
       _scanState = ScanState.processing;
@@ -186,11 +176,12 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
 
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
-        _feedbackAnimationController.reverse().then((_) async {
+        _feedbackAnimationController.reverse().then((_) {
           setState(() {
             _scanState = ScanState.scanning;
             _scannedStudent = null;
             _studentImagePath = null;
+            _isProcessingScan = false;
           });
         });
       }
@@ -203,9 +194,10 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
       HapticFeedback.heavyImpact();
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
-        _feedbackAnimationController.reverse().then((_) async {
+        _feedbackAnimationController.reverse().then((_) {
           setState(() {
             _scanState = ScanState.scanning;
+            _isProcessingScan = false;
           });
         });
       }
@@ -236,12 +228,12 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     _controller.dispose();
     _borderAnimationController.dispose();
     _feedbackAnimationController.dispose();
-    _debounceTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return VisibilityDetector(
       key: const Key('qr_scanner'),
       onVisibilityChanged: (info) {
@@ -255,34 +247,78 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            MobileScanner(
-              controller: _controller,
-              onDetect: _handleBarcodeScan,
-            ),
-            _buildScannerOverlay(context),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _buildFeedbackOverlay(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+        child: LayoutBuilder(builder: (context, constraints) {
+          final screenWidth = constraints.maxWidth;
+          final screenHeight = constraints.maxHeight;
+          final smallestDimension = screenWidth < screenHeight ? screenWidth : screenHeight;
+          final scanWindowSize = smallestDimension * 0.7;
+          final scanWindow = Rect.fromCenter(
+            center: Offset(screenWidth / 2, screenHeight / 2),
+            width: scanWindowSize,
+            height: scanWindowSize,
+          );
 
-  Widget _buildScannerOverlay(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final scanWindow = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height / 2),
-      width: 250,
-      height: 250,
-    );
-    return CustomPaint(
-      size: MediaQuery.of(context).size,
-      painter: ScannerOverlayPainter(scanWindow: scanWindow, animation: _borderAnimationController),
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              MobileScanner(
+                controller: _controller,
+                onDetect: _handleBarcodeScan,
+              ),
+              CustomPaint(
+                size: constraints.biggest,
+                painter: ScannerOverlayPainter(
+                  scanWindow: scanWindow,
+                  animation: _borderAnimationController,
+                  primaryColor: theme.colorScheme.primary,
+                ),
+              ),
+              Positioned(
+                top: scanWindow.bottom + 24,
+                left: 0,
+                right: 0,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Align QR code within the frame to scan',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(20.0),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => _controller.toggleTorch(),
+                            icon: const Icon(Icons.flash_on, color: Colors.white),
+                            tooltip: 'Toggle Flash',
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () => _controller.switchCamera(),
+                            icon: const Icon(Icons.cameraswitch_outlined, color: Colors.white),
+                            tooltip: 'Switch Camera',
+                          ),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _buildFeedbackOverlay(),
+              ),
+            ],
+          );
+        }),
+      ),
     );
   }
 
@@ -292,18 +328,13 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     }
 
     return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: FadeTransition(
         opacity: _feedbackAnimationController,
         child: ScaleTransition(
           scale: _feedbackAnimationController,
           child: Container(
-            decoration: BoxDecoration(
-              color: _scanState == ScanState.success
-                  ? Colors.green.withOpacity(0.1)
-                  : Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
+            color: _scanState == ScanState.success ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
             child: Center(
               child: _scanState == ScanState.success
                   ? StudentInfoCard(
@@ -322,47 +353,87 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
 class ScannerOverlayPainter extends CustomPainter {
   final Rect scanWindow;
   final Animation<double> animation;
+  final Color primaryColor;
 
-  ScannerOverlayPainter({required this.scanWindow, required this.animation}) : super(repaint: animation);
+  ScannerOverlayPainter({
+    required this.scanWindow,
+    required this.animation,
+    required this.primaryColor,
+  }) : super(repaint: animation);
 
   @override
   void paint(Canvas canvas, Size size) {
     final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
-    final cutoutPath = Path()..addRRect(RRect.fromRectAndCorners(scanWindow, topLeft: Radius.circular(12), topRight: Radius.circular(12), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)));
+    final cutoutPath = Path()..addRRect(RRect.fromRectAndCorners(scanWindow, topLeft: const Radius.circular(20), topRight: const Radius.circular(20), bottomLeft: const Radius.circular(20), bottomRight: const Radius.circular(20)));
     final overlayPath = Path.combine(PathOperation.difference, backgroundPath, cutoutPath);
 
     final overlayPaint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
+      ..color = Colors.black.withOpacity(0.6)
       ..style = PaintingStyle.fill;
     canvas.drawPath(overlayPath, overlayPaint);
 
     final borderPaint = Paint()
-      ..color = Colors.white
+      ..color = Colors.white.withOpacity(0.5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    canvas.drawRRect(RRect.fromRectAndCorners(scanWindow, topLeft: Radius.circular(12), topRight: Radius.circular(12), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)), borderPaint);
+    canvas.drawRRect(RRect.fromRectAndCorners(scanWindow, topLeft: const Radius.circular(20), topRight: const Radius.circular(20), bottomLeft: const Radius.circular(20), bottomRight: const Radius.circular(20)), borderPaint);
 
-    final cornerLength = 30.0;
+    final cornerLength = scanWindow.width * 0.1;
     final cornerPaint = Paint()
-      ..color = Color.lerp(Colors.green, Colors.white, animation.value)!
+      ..color = Color.lerp(primaryColor, Colors.white, animation.value)!
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 6;
+
+    final cornerRect = RRect.fromRectAndCorners(scanWindow, topLeft: const Radius.circular(20), topRight: const Radius.circular(20), bottomLeft: const Radius.circular(20), bottomRight: const Radius.circular(20));
 
     // Top-left corner
-    canvas.drawLine(scanWindow.topLeft, scanWindow.topLeft + Offset(cornerLength, 0), cornerPaint);
-    canvas.drawLine(scanWindow.topLeft, scanWindow.topLeft + Offset(0, cornerLength), cornerPaint);
+    canvas.drawLine(
+      Offset(cornerRect.left, cornerRect.top + cornerLength),
+      Offset(cornerRect.left, cornerRect.top),
+      cornerPaint
+    );
+    canvas.drawLine(
+      Offset(cornerRect.left, cornerRect.top),
+      Offset(cornerRect.left + cornerLength, cornerRect.top),
+      cornerPaint
+    );
 
     // Top-right corner
-    canvas.drawLine(scanWindow.topRight, scanWindow.topRight - Offset(cornerLength, 0), cornerPaint);
-    canvas.drawLine(scanWindow.topRight, scanWindow.topRight + Offset(0, cornerLength), cornerPaint);
+    canvas.drawLine(
+      Offset(cornerRect.right - cornerLength, cornerRect.top),
+      Offset(cornerRect.right, cornerRect.top),
+      cornerPaint
+    );
+    canvas.drawLine(
+      Offset(cornerRect.right, cornerRect.top),
+      Offset(cornerRect.right, cornerRect.top + cornerLength),
+      cornerPaint
+    );
 
     // Bottom-left corner
-    canvas.drawLine(scanWindow.bottomLeft, scanWindow.bottomLeft + Offset(cornerLength, 0), cornerPaint);
-    canvas.drawLine(scanWindow.bottomLeft, scanWindow.bottomLeft - Offset(0, cornerLength), cornerPaint);
+    canvas.drawLine(
+      Offset(cornerRect.left, cornerRect.bottom - cornerLength),
+      Offset(cornerRect.left, cornerRect.bottom),
+      cornerPaint
+    );
+    canvas.drawLine(
+      Offset(cornerRect.left, cornerRect.bottom),
+      Offset(cornerRect.left + cornerLength, cornerRect.bottom),
+      cornerPaint
+    );
 
     // Bottom-right corner
-    canvas.drawLine(scanWindow.bottomRight, scanWindow.bottomRight - Offset(cornerLength, 0), cornerPaint);
-    canvas.drawLine(scanWindow.bottomRight, scanWindow.bottomRight - Offset(0, cornerLength), cornerPaint);
+    canvas.drawLine(
+      Offset(cornerRect.right - cornerLength, cornerRect.bottom),
+      Offset(cornerRect.right, cornerRect.bottom),
+      cornerPaint
+    );
+    canvas.drawLine(
+      Offset(cornerRect.right, cornerRect.bottom - cornerLength),
+      Offset(cornerRect.right, cornerRect.bottom),
+      cornerPaint
+    );
   }
 
   @override
@@ -377,48 +448,80 @@ class StudentInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      margin: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final studentAvatar = CircleAvatar(
+      radius: 40,
+      backgroundImage: imagePath != null ? FileImage(File(imagePath!)) : null,
+      child: imagePath == null ? const Icon(Icons.person, size: 40) : null,
+    );
+
+    final studentDetails = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${student.firstName} ${student.lastName}',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.left,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'LRN: ${student.lrn}',
+          style: textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '${student.studentYear} - ${student.studentSection}',
+          style: textTheme.bodySmall,
+        ),
+      ],
+    );
+
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        final isPortrait = orientation == Orientation.portrait;
+        return Container(
+          width: isPortrait ? null : 450,
+          padding: const EdgeInsets.all(24),
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundImage: imagePath != null ? FileImage(File(imagePath!)) : null,
-            child: imagePath == null ? const Icon(Icons.person, size: 50) : null,
+          child: SingleChildScrollView(
+            child: isPortrait
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      studentAvatar,
+                      const SizedBox(height: 16),
+                      studentDetails,
+                      const SizedBox(height: 24),
+                      const Icon(Icons.check_circle, color: Colors.green, size: 48),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      studentAvatar,
+                      const SizedBox(width: 24),
+                      Expanded(child: studentDetails),
+                      const SizedBox(width: 24),
+                      const Icon(Icons.check_circle, color: Colors.green, size: 48),
+                    ],
+                  ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            '${student.firstName} ${student.lastName}',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'LRN: ${student.lrn}',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${student.studentYear} - ${student.studentSection}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 24),
-          const Icon(Icons.check_circle, color: Colors.green, size: 40),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -430,36 +533,41 @@ class ErrorInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(24),
-      margin: const EdgeInsets.all(32),
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error, color: Colors.red, size: 50),
-          const SizedBox(height: 16),
-          Text(
-            'Scan Error',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error, color: Colors.red, size: 50),
+            const SizedBox(height: 16),
+            Text(
+              'Scan Error',
+              style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -99,7 +99,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
         return;
       }
 
-      if (userMetadata.role != 'teacher') {
+      if (userMetadata.role != 'teacher' && userMetadata.role != 'admin') {
         _setError('This feature is only available for teachers.', showRetry: false);
         return;
       }

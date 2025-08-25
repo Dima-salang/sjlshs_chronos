@@ -15,6 +15,8 @@ import 'package:sjlshs_chronos/main.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:sjlshs_chronos/features/device_management/key_management.dart';
+import 'package:sjlshs_chronos/features/auth/screens/splash_screen.dart';
+import 'package:sjlshs_chronos/features/device_management/settings.dart';
 
 
 import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
@@ -50,8 +52,11 @@ final routerProvider = Provider<GoRouter>((ref) {
   final bool isUserLoggedIn = user != null;
 
   return GoRouter(
-    initialLocation: isUserLoggedIn ? '/scanner' : '/login',
+    initialLocation: '/splash',
     redirect: (context, state) {
+      if (state.uri.path == '/splash') {
+        return null;
+      }
       // Handle loading state
       if (userAsync.isLoading || isarAsync.isLoading) {
         return '/loading';
@@ -111,6 +116,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       // Auth routes
       GoRoute(
         path: '/login',
@@ -187,6 +197,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/device-configuration',
         name: 'device-configuration',
         builder: (context, state) => const DeviceConfigurationScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        builder: (context, state) => const SettingsScreen(),
       )
     ],
     errorBuilder: (context, state) => const AppScaffold(

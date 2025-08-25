@@ -30,5 +30,15 @@ TO-DO
 
 TO-DO
 - ensure that only unique absences are recorded per student per day even if multiple present records are present in different tablet.
-- improve ui with sjlshs logo
-- settings for dark mode and light mode
+- improve ui with sjlshs logo - DONE
+- settings for dark mode and light mode - DONE
+
+
+
+TO-DO
+- Per section for report generation
+- Male and female inclusion in student import
+- school logo in login - DONE
+- do report generation for admin in python client
+- device naming option for device status - DONE
+- enforce syncing presences for all main tablet today before syncing absences once. enforce error if one of the tablets failed to sync records for the current day. - DONE

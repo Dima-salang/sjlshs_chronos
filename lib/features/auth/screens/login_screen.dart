@@ -100,6 +100,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  SizedBox(
+                    height: 150,
+                    child: Image.asset('assets/images/sjlshs-removebg.png'),
+                  ),
+                  const SizedBox(height: 24),
                   const Text(
                     'SJLSHS Chronos',
                     style: TextStyle(

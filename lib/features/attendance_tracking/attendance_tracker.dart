@@ -16,7 +16,6 @@ import 'package:sjlshs_chronos/features/student_management/models/students.dart'
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 enum ScanState {
   scanning,

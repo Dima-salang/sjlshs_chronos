@@ -18,6 +18,7 @@ import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sjlshs_chronos/providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +52,7 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final themeNotifier = ref.watch(themeNotifierProvider);
 
     return MaterialApp.router(
       title: 'SJLSHS Chronos',
@@ -71,6 +73,7 @@ class MyApp extends ConsumerWidget {
         useMaterial3: true,
         fontFamily: 'SF Pro Display',
       ),
+      themeMode: themeNotifier.themeMode,
       routerConfig: router,
     );
   }

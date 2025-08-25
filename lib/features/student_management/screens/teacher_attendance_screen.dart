@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
-import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 
 enum DateRangePreset { today, yesterday, thisWeek, lastWeek, thisMonth, custom }

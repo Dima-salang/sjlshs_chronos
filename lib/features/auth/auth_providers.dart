@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sjlshs_chronos/features/auth/user_metadata.dart' as user_metadata;
 import 'package:isar/isar.dart';
-import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
 
@@ -51,6 +50,8 @@ final userMetadataProvider = FutureProvider<user_metadata.UserMetadata?>((ref) a
     
     try {
       final userMetadata = user_metadata.UserMetadata.fromMap(data);
+
+
       print('✅ Successfully created UserMetadata: ${userMetadata.toMap()}');
       return userMetadata;
     } catch (e, stackTrace) {

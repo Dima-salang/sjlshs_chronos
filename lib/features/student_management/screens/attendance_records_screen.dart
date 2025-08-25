@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:isar/isar.dart';
-import 'package:sjlshs_chronos/features/device_management/device_management.dart' as DeviceManagement;
+import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
+import 'package:sjlshs_chronos/features/auth/user_metadata.dart';
+import 'package:sjlshs_chronos/features/device_management/device_management.dart'
+    as DeviceManagement;
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:intl/intl.dart';
@@ -9,24 +13,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/report_manager.dart';
 import 'package:logger/logger.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:file_picker/file_picker.dart';
 
-
-class AttendanceRecordsScreen extends StatefulWidget {
+class AttendanceRecordsScreen extends ConsumerStatefulWidget {
   final Isar isar;
-  
-  const AttendanceRecordsScreen({
-    Key? key,
-    required this.isar,
-  }) : super(key: key);
+
+  const AttendanceRecordsScreen({Key? key, required this.isar})
+    : super(key: key);
 
   @override
-  State<AttendanceRecordsScreen> createState() => _AttendanceRecordsScreenState();
+  ConsumerState<AttendanceRecordsScreen> createState() =>
+      _AttendanceRecordsScreenState();
 }
 
-class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
+class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScreen> {
   DateTime _selectedDate = DateTime.now();
   List<AttendanceRecord> _records = [];
   bool _isLoading = false;
@@ -41,6 +42,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   bool _isGeneratingReport = false;
   List<Map<String, dynamic>> _syncStatusList = [];
   bool _isLoadingSyncStatus = false;
+  String? _userRole;
 
   late final RecordManager _recordManager;
 
@@ -51,7 +53,18 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       firestore: FirebaseFirestore.instance,
       isar: widget.isar,
     );
-    _loadRecords();    
+    
+    _loadRecords();
+    _fetchUserRole();
+  }
+
+  Future<void> _fetchUserRole() async {
+    final userMetadata = await ref.read(userMetadataProvider.future);
+    if (mounted) {
+      setState(() {
+        _userRole = userMetadata?.role;
+      });
+    }
   }
 
   @override
@@ -69,18 +82,23 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
     try {
       // Get records for the selected date
-      final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      final startOfDay = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+      );
       final endOfDay = startOfDay.add(const Duration(days: 1));
-      
-      final records = await widget.isar.attendanceRecords
-          .where()
-          .timestampBetween(startOfDay, endOfDay)
-          .findAll();
+
+      final records =
+          await widget.isar.attendanceRecords
+              .where()
+              .timestampBetween(startOfDay, endOfDay)
+              .findAll();
 
       // Sort by timestamp (newest first)
       records.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       print(records);
-      
+
       setState(() {
         _records = records;
       });
@@ -113,7 +131,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
   List<AttendanceRecord> get _filteredRecords {
     if (_searchQuery.isEmpty) return _records;
-    
+
     final query = _searchQuery.toLowerCase();
     return _records.where((record) {
       return record.firstName.toLowerCase().contains(query) ||
@@ -202,7 +220,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
   Future<void> _loadSyncStatus() async {
     if (_isLoadingSyncStatus) return;
-    
+
     setState(() {
       _isLoadingSyncStatus = true;
     });
@@ -216,7 +234,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       debugPrint('Error loading sync status: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load sync status: ${e.toString()}')),
+          SnackBar(
+            content: Text('Failed to load sync status: ${e.toString()}'),
+          ),
         );
       }
     } finally {
@@ -268,7 +288,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
         logger: logger,
       );
 
-      final fileName = 'attendance_report_${DateFormat('''yyyyMMdd_HHmmss''').format(DateTime.now())}.xlsx';
+      final fileName =
+          'attendance_report_${DateFormat('''yyyyMMdd_HHmmss''').format(DateTime.now())}.xlsx';
       final filePath = '$outputDirectory/$fileName';
 
       // 2. Generate the report
@@ -290,7 +311,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                 final result = await OpenFile.open(filePath);
                 if (result.type != ResultType.done && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Could not open file: ${result.message}')),
+                    SnackBar(
+                      content: Text('Could not open file: ${result.message}'),
+                    ),
                   );
                 }
               },
@@ -300,9 +323,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating report: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating report: $e')));
       }
     } finally {
       if (mounted) {
@@ -320,7 +343,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       lastDate: DateTime(2100),
       initialDateRange: _reportDateRange,
     );
-    
+
     if (picked != null && picked != _reportDateRange) {
       setState(() {
         _reportDateRange = picked;
@@ -368,7 +391,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               ],
             ),
           );
-        }
+        },
       ),
     );
   }
@@ -442,22 +465,25 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.cloud_upload_outlined, size: 20),
-                      label: const Text('Sync Absences'),
-                      onPressed: _isSyncing ? null : _syncAbsences,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                        foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
+                  if (_userRole == 'admin')
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+                        label: const Text('Sync Absences'),
+                        onPressed: _isSyncing ? null : _syncAbsences,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor:
+                              Theme.of(context).colorScheme.secondaryContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onSecondaryContainer,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
           ],
@@ -475,12 +501,14 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         IconButton(
-          icon: _isLoadingSyncStatus
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.refresh),
+          icon:
+              _isLoadingSyncStatus
+                  ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.refresh),
           onPressed: _isLoadingSyncStatus ? null : _loadSyncStatus,
           tooltip: 'Refresh sync status',
         ),
@@ -490,10 +518,12 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
   Widget _buildDeviceStatusList() {
     if (_isLoadingSyncStatus && _syncStatusList.isEmpty) {
-      return const Center(child: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: CircularProgressIndicator(),
-      ));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
     if (_syncStatusList.isEmpty) {
@@ -562,29 +592,46 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4),
           shape: RoundedRectangleBorder(
-            side: isThisDevice 
-                ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)
-                : BorderSide(color: Colors.grey.shade300),
+            side:
+                isThisDevice
+                    ? BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    )
+                    : BorderSide(color: Colors.grey.shade300),
             borderRadius: BorderRadius.circular(12.0),
           ),
           child: ListTile(
+            onTap: () => _showDeviceDetailsDialog(device),
+            isThreeLine: true,
             leading: Icon(
               isThisDevice ? Icons.phone_android : Icons.device_unknown,
-              color: isThisDevice
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.grey.shade600,
+              color:
+                  isThisDevice
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey.shade600,
             ),
             title: Text(
-              '${device['deviceId']} ${isThisDevice ? '''(This Device)''' : ''}',
+              '${device['name'] ?? device['deviceId']} ${isThisDevice ? '(This Device)' : ''}',
               style: TextStyle(
                 fontWeight: isThisDevice ? FontWeight.bold : FontWeight.normal,
               ),
               overflow: TextOverflow.ellipsis,
             ),
-            subtitle: Text(
-              lastSync != null
-                  ? 'Synced: ${DateFormat('''MMM d, hh:mm a''').format(lastSync)}'
-                  : 'Never synced',
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ID: ${device['deviceId']}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  lastSync != null
+                      ? 'Synced: ${DateFormat('MMM d, hh:mm a').format(lastSync)}'
+                      : 'Never synced',
+                ),
+              ],
             ),
             trailing: Chip(
               avatar: Icon(Icons.circle, color: statusColor, size: 12),
@@ -604,7 +651,6 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   Widget _buildRecordsTab() {
     return Column(
       children: [
-        
         // Date selector and search bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -622,7 +668,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                           icon: const Icon(Icons.chevron_left),
                           onPressed: () {
                             setState(() {
-                              _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+                              _selectedDate = _selectedDate.subtract(
+                                const Duration(days: 1),
+                              );
                             });
                             _loadRecords();
                           },
@@ -638,7 +686,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                           icon: const Icon(Icons.chevron_right),
                           onPressed: () {
                             setState(() {
-                              _selectedDate = _selectedDate.add(const Duration(days: 1));
+                              _selectedDate = _selectedDate.add(
+                                const Duration(days: 1),
+                              );
                             });
                             _loadRecords();
                           },
@@ -667,35 +717,40 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
             ],
           ),
         ),
-        
+
         // Records list
         Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredRecords.isEmpty
+          child:
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredRecords.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.assignment_outlined, size: 64, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No attendance records found\nfor ${DateFormat('''MMMM d, y''').format(_selectedDate)}',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.grey,
-                                ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _filteredRecords.length,
-                      itemBuilder: (context, index) {
-                        final record = _filteredRecords[index];
-                        return _buildRecordItem(record);
-                      },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.assignment_outlined,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No attendance records found\nfor ${DateFormat('''MMMM d, y''').format(_selectedDate)}',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleMedium?.copyWith(color: Colors.grey),
+                        ),
+                      ],
                     ),
+                  )
+                  : ListView.builder(
+                    itemCount: _filteredRecords.length,
+                    itemBuilder: (context, index) {
+                      final record = _filteredRecords[index];
+                      return _buildRecordItem(record);
+                    },
+                  ),
         ),
       ],
     );
@@ -705,9 +760,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
-        leading: CircleAvatar(
-          child: Text(record.firstName[0].toUpperCase()),
-        ),
+        leading: CircleAvatar(child: Text(record.firstName[0].toUpperCase())),
         title: Text(
           '${record.firstName} ${record.lastName}',
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -739,29 +792,100 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   void _showRecordDetails(AttendanceRecord record) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Attendance Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDetailRow('Student', '${record.firstName} ${record.lastName}'),
-              _buildDetailRow('LRN', record.lrn),
-              _buildDetailRow('Grade & Section', '${record.studentYear} - ${record.studentSection}'),
-              _buildDetailRow('Status', record.isPresent ? 'Present' : 'Absent'),
-              _buildDetailRow('Date', DateFormat('''MMMM d, y''').format(record.timestamp)),
-              _buildDetailRow('Time', DateFormat('''h:mm a''').format(record.timestamp)),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Attendance Details'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDetailRow(
+                    'Student',
+                    '${record.firstName} ${record.lastName}',
+                  ),
+                  _buildDetailRow('LRN', record.lrn),
+                  _buildDetailRow(
+                    'Grade & Section',
+                    '${record.studentYear} - ${record.studentSection}',
+                  ),
+                  _buildDetailRow(
+                    'Status',
+                    record.isPresent ? 'Present' : 'Absent',
+                  ),
+                  _buildDetailRow(
+                    'Date',
+                    DateFormat('''MMMM d, y''').format(record.timestamp),
+                  ),
+                  _buildDetailRow(
+                    'Time',
+                    DateFormat('''h:mm a''').format(record.timestamp),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('Close'),
+              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('Close'),
+    );
+  }
+
+  void _showDeviceDetailsDialog(Map<String, dynamic> device) {
+    final deviceName = device['name'] as String? ?? device['deviceId'];
+    final deviceId = device['deviceId'] as String;
+    final lastSync = device['lastSync'] as DateTime?;
+    final isThisDevice = device['isThisDevice'] as bool;
+
+    String lastSyncString;
+    if (lastSync == null) {
+      lastSyncString = 'Never';
+    } else {
+      lastSyncString = DateFormat(
+        'MMMM d, y \'at\' h:mm:ss a',
+      ).format(lastSync);
+    }
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(isThisDevice ? Icons.phone_android : Icons.device_unknown),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(deviceName, overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDetailRow(
+                    'Status',
+                    isThisDevice
+                        ? 'This is your current device'
+                        : 'This is a remote device',
+                  ),
+                  _buildDetailRow('Device Name', deviceName),
+                  _buildDetailRow('Device ID', deviceId),
+                  _buildDetailRow('Last Sync Time', lastSyncString),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('Close'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -771,10 +895,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$label: ',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
           Expanded(child: Text(value)),
         ],
       ),
@@ -800,10 +921,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                 children: [
                   const Text(
                     'Generate Attendance Report',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
 
@@ -815,14 +933,22 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      icon: _isGeneratingReport
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.download_rounded, size: 20),
-                      label: Text(_isGeneratingReport ? 'Generating...' : 'Generate & Save Report'),
+                      icon:
+                          _isGeneratingReport
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(
+                        _isGeneratingReport
+                            ? 'Generating...'
+                            : 'Generate & Save Report',
+                      ),
                       onPressed: _isGeneratingReport ? null : _generateReport,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -837,9 +963,12 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                     const LinearProgressIndicator(),
                     const SizedBox(height: 8),
                     const Text(
-                      'Generating report. This may take a moment...', 
+                      'Generating report. This may take a moment...',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color: Colors.grey,
+                      ),
                     ),
                   ],
                 ],
@@ -851,7 +980,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           // Instructions Card
           Card(
             elevation: 0,
-            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.secondaryContainer.withOpacity(0.3),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12.0),
             ),
@@ -862,16 +993,13 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                 children: [
                   Text(
                     'How it Works',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 12),
                   Text(
-                    '1. Select the date range for the report.\n' 
-                    '2. Click \'Generate & Save Report\'.\n' 
-                    '3. Choose a directory to save the Excel file to.\n' 
+                    '1. Select the date range for the report.\n'
+                    '2. Click \'Generate & Save Report\'.\n'
+                    '3. Choose a directory to save the Excel file to.\n'
                     '4. The report will be generated and you will be notified upon completion.',
                     style: TextStyle(fontSize: 14, height: 1.5),
                   ),
@@ -907,7 +1035,11 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, size: 20, color: Colors.grey),
+                    const Icon(
+                      Icons.calendar_today,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       '${DateFormat('''MMM d, y''').format(_reportDateRange.start)} - ${DateFormat('''MMM d, y''').format(_reportDateRange.end)}',

@@ -36,7 +36,7 @@ TO-DO
 
 
 TO-DO
-- Per section for report generation
+- Per section for report generation - DONE
 - Male and female inclusion in student import
 - school logo in login - DONE
 - do report generation for admin in python client
@@ -48,4 +48,5 @@ TO-DO
 TO-DO
 - optimize firestore storing
 - make timestamp to be millisecondsfromEpoch to save space - DONE
+- make assignable sections to accounts without unverifying the account first in the account management screen
 

@@ -103,11 +103,17 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> w
                 account['email'] ?? 'No email',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: Text('Role: ${account['role'] ?? 'N/A'}'),
+              subtitle: Text('Role: ${account['role'] ?? 'N/A'}${account['role'] == 'teacher' && account['section'] != null ? ' • Section: ${account['section']}' : ''}'),
               trailing: isVerified
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (account['role'] == 'teacher')
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => _showSectionDialog(account['uid'], currentSection: account['section'], isAlreadyVerified: true),
+                            tooltip: 'Assign Section',
+                          ),
                         IconButton(
                           icon: const Icon(Icons.block, color: Colors.red),
                           onPressed: () => _updateVerification(account['uid'], false),
@@ -152,22 +158,22 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> w
     }
   }
 
-  Future<void> _showSectionDialog(String uid) async {
-    final sectionController = TextEditingController();
-    final _formKey = GlobalKey<FormState>();
+  Future<void> _showSectionDialog(String uid, {String? currentSection, bool isAlreadyVerified = false}) async {
+    final sectionController = TextEditingController(text: currentSection);
+    final formKey = GlobalKey<FormState>();
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Assign Section'),
+        title: Text(isAlreadyVerified ? 'Update Section' : 'Assign Section'),
         content: Form(
-          key: _formKey,
+          key: formKey,
           child: TextFormField(
             controller: sectionController,
             decoration: const InputDecoration(
-              labelText: 'Enter Section (e.g., Grade 11 - STEM)',
+              labelText: 'Enter Section (e.g., Microsoft)',
               border: OutlineInputBorder(),
-              hintText: 'Example: Grade 11 - STEM',
+              hintText: 'Example: Microsoft',
             ),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
@@ -184,28 +190,30 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> w
           ),
           ElevatedButton(
             onPressed: () {
-              if (_formKey.currentState?.validate() == true) {
+              if (formKey.currentState?.validate() == true) {
                 Navigator.of(context).pop(true);
-                
               }
             },
-            child: const Text('Assign'),
+            child: Text(isAlreadyVerified ? 'Update' : 'Assign'),
           ),
         ],
       ),
     );
 
-    print("Result: $result");
-
     if (result == true && sectionController.text.trim().isNotEmpty) {
       final section = sectionController.text.trim();
-      print(section);
       try {
-        await _accountManagement.verifyAccount(uid);
+        if (!isAlreadyVerified) {
+          await _accountManagement.verifyAccount(uid);
+        }
         await _accountManagement.setSection(uid, section);
         if (mounted) {
-          _showSuccessSnackBar('Teacher verified and assigned to $section');
+          final message = isAlreadyVerified
+              ? 'Section updated successfully'
+              : 'Teacher verified and assigned to $section';
+          _showSuccessSnackBar(message);
         }
+        _loadAccounts();
       } catch (e) {
         if (mounted) {
           _showErrorSnackBar('Error assigning section: $e');

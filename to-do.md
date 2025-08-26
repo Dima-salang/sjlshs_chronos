@@ -42,3 +42,10 @@ TO-DO
 - do report generation for admin in python client
 - device naming option for device status - DONE
 - enforce syncing presences for all main tablet today before syncing absences once. enforce error if one of the tablets failed to sync records for the current day. - DONE
+
+
+
+TO-DO
+- optimize firestore storing
+- make timestamp to be millisecondsfromEpoch to save space
+

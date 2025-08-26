@@ -81,6 +81,7 @@ class RecordManager {
   // write presences to firestore
   Future<void> writePresencesToFirestore(List<AttendanceRecord> records) async {
     final batch = firestore?.batch();
+
     for (var i = 0; i < records.length; i += 500) {
       final chunk = records.sublist(i, (i + 500).clamp(0, records.length));
       for (AttendanceRecord record in chunk) {
@@ -93,7 +94,7 @@ class RecordManager {
           'lastName': record.lastName,
           'studentYear': record.studentYear,
           'studentSection': record.studentSection,
-          'timestamp': record.timestamp,
+          'timestamp': record.timestamp.millisecondsSinceEpoch,
           'isAbsent': false,
         };
         batch?.set(docRef!, data, SetOptions(merge: true));
@@ -111,6 +112,7 @@ class RecordManager {
     for (var i = 0; i < absences.length; i += 500) {
       final chunk = absences.sublist(i, (i + 500).clamp(0, absences.length));
       for (DateTime absence in chunk) {
+
         final docID =
             '${student.lrn}_${absence.toIso8601String().substring(0, 10)}';
         final docRef = firestore?.collection('attendance').doc(docID);
@@ -120,7 +122,7 @@ class RecordManager {
           'lastName': student.lastName,
           'studentYear': student.studentYear,
           'studentSection': student.studentSection,
-          'timestamp': absence,
+          'timestamp': absence.millisecondsSinceEpoch,
           'isAbsent': true,
         };
         batch?.set(docRef!, data, SetOptions(merge: true));

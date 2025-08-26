@@ -47,5 +47,5 @@ TO-DO
 
 TO-DO
 - optimize firestore storing
-- make timestamp to be millisecondsfromEpoch to save space
+- make timestamp to be millisecondsfromEpoch to save space - DONE
 

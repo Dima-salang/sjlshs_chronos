@@ -43,6 +43,7 @@ class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScree
   List<Map<String, dynamic>> _syncStatusList = [];
   bool _isLoadingSyncStatus = false;
   String? _userRole;
+  String? _selectedSection;
 
   late final RecordManager _recordManager;
 
@@ -297,6 +298,7 @@ class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScree
         _reportDateRange.start,
         _reportDateRange.end,
         filePath,
+        _selectedSection,
       );
 
       // 3. Show success message and option to open

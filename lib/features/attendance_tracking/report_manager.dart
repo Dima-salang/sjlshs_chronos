@@ -18,9 +18,16 @@ class ReportManager {
 
 
   // get all student records from firestore for report generation
-  Future<QuerySnapshot<Map<String, dynamic>>> getStudentRecords(DateTime start, DateTime end) async {
+  Future<QuerySnapshot<Map<String, dynamic>>> getStudentRecords(DateTime start, DateTime end, String? section) async {
     try {
-      return await firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end).get();
+      var query = firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end);
+
+      // Only add the section filter if it's not null
+      if (section != null) {
+        query = query.where('studentSection', isEqualTo: section);
+      }
+
+      return await query.get();
     } catch (e) {
       logger.e('Error getting student records: $e');
       throw Exception('Error getting student records: $e');
@@ -31,9 +38,9 @@ class ReportManager {
 
 
   // make the excel file
-  Future<void> writeReport(DateTime start, DateTime end, String filePath) async {
+  Future<void> writeReport(DateTime start, DateTime end, String filePath, String? section) async {
     try {
-      final records = await getStudentRecords(start, end);
+      final records = await getStudentRecords(start, end, section);
       final excel = Excel.createExcel();
       final months = getMonthsBetween(start, end);
       

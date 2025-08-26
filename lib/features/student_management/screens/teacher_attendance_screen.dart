@@ -1,10 +1,14 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
+import 'package:logger/logger.dart';
+import 'package:open_file/open_file.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/record_manager.dart';
+import 'package:sjlshs_chronos/features/attendance_tracking/report_manager.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 
@@ -43,6 +47,8 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
   DateRangePreset _selectedPreset = DateRangePreset.today;
   String _searchQuery = '';
   SortOption _sortOption = SortOption.nameAsc;
+  bool _isGeneratingReport = false;
+  String? _section;
   
   // Date formatters
   static final _dateFormat = DateFormat('MMM d, yyyy');
@@ -106,6 +112,12 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
       if (section == null) {
         _setError('No class section assigned to your account.', showRetry: false);
         return;
+      }
+      
+      if (mounted) {
+        setState(() {
+          _section = section;
+        });
       }
 
       final dateRange = _createDateRange();
@@ -218,7 +230,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
   }
 
   Future<void> _showCustomDatePicker() async {
-    final result = await showDialog<({DateTime start, DateTime end})?>(
+    final result = await showDialog<({DateTime start, DateTime end})?>( 
       context: context,
       builder: (context) => _CustomDateRangeDialog(
         initialStartDate: _startDate,
@@ -303,6 +315,95 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
     }
     
     return '${_shortDateFormat.format(_startDate)} - ${_shortDateFormat.format(_endDate)}';
+  }
+
+  Future<void> _generateReport() async {
+    if (_isGeneratingReport) return;
+
+    // 1. Select Directory
+    String? outputDirectory;
+    try {
+      outputDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Output Directory',
+      );
+
+      if (outputDirectory == null) {
+        // User canceled the picker
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Directory selection canceled.')),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error selecting directory: $e')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isGeneratingReport = true;
+    });
+
+    try {
+      final logger = Logger();
+      final reportManager = ReportManager(
+        isar: widget.isar,
+        firestore: FirebaseFirestore.instance,
+        logger: logger,
+      );
+
+      final fileName =
+          'attendance_report_${DateFormat('''yyyyMMdd_HHmmss''').format(DateTime.now())}.xlsx';
+      final filePath = '$outputDirectory/$fileName';
+
+      // 2. Generate the report
+      await reportManager.writeReport(
+        _startDate,
+        _endDate,
+        filePath,
+        _section,
+      );
+
+      // 3. Show success message and option to open
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report saved to $filePath'),
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () async {
+                final result = await OpenFile.open(filePath);
+                if (result.type != ResultType.done && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not open file: ${result.message}'),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating report: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingReport = false;
+        });
+      }
+    }
   }
 
   Widget _buildStatisticsCards() {
@@ -413,7 +514,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
           // Search field
           TextField(
             decoration: InputDecoration(
-              hintText: 'Search by student name...',
+              hintText: 'Search by student name...', 
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
@@ -462,6 +563,32 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
                 );
               }
             },
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: _isGeneratingReport
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.download_rounded, size: 20),
+              label: Text(
+                _isGeneratingReport ? 'Generating...' : 'Generate Report',
+              ),
+              onPressed: _isGeneratingReport ? null : _generateReport,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -657,6 +784,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
     );
   }
 }
+
 
 class _StatCard extends StatelessWidget {
   final String title;

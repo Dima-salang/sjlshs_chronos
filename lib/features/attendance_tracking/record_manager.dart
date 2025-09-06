@@ -52,6 +52,18 @@ class RecordManager {
     }
   }
 
+  // deleting an attendance record from isar
+  Future<void> deleteRecordFromIsar(AttendanceRecord record) async {
+    try {
+      await isar.writeTxn(() async {
+        await isar.attendanceRecords.delete(record.id);
+      });
+    } catch (e) {
+      logger.e('Error deleting record from Isar: $e');
+      throw Exception('Error deleting record from Isar: $e');
+    }
+  }
+
   // syncs absences to firestore based on the present records of students
   Future<void> syncPresences() async {
     final now = DateTime.now();
@@ -300,6 +312,11 @@ class RecordManager {
       return null;
     }
   }
+
+
+  // LATE RECORD FUNCTIONS
+
+
 
   /* UTIL FUNCTIONS */
 

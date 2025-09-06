@@ -20,7 +20,7 @@ class ReportManager {
   // get all student records from firestore for report generation
   Future<QuerySnapshot<Map<String, dynamic>>> getStudentRecords(DateTime start, DateTime end, String? section) async {
     try {
-      var query = firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end);
+      var query = firestore.collection('attendance').where('timestamp', isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end).where('isAbsent', isEqualTo: true);
 
       // Only add the section filter if it's not null
       if (section != null) {
@@ -150,11 +150,20 @@ Future<Excel> fillExcelFile(
 
 
   // get all days for the specific month
+// get all weekdays (Mon–Fri) for the specific month
 List<DateTime> getDaysForMonth(DateTime month) {
   final nextMonth = DateTime(month.year, month.month + 1, 1);
-  final lastDay = nextMonth.subtract(Duration(days: 1)).day;
-  return List<DateTime>.generate(lastDay, (i) => DateTime(month.year, month.month, i + 1));
+  final lastDay = nextMonth.subtract(const Duration(days: 1)).day;
+
+  return List<DateTime>.generate(lastDay, (i) {
+    final date = DateTime(month.year, month.month, i + 1);
+    return date;
+  }).where((date) {
+    // Exclude weekends (Saturday = 6, Sunday = 7)
+    return date.weekday != DateTime.saturday && date.weekday != DateTime.sunday;
+  }).toList();
 }
+
 
 
 

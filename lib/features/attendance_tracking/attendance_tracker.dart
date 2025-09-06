@@ -273,7 +273,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
                 ),
               ),
               Positioned(
-                top: scanWindow.bottom + 24,
+                bottom: 24,
                 left: 0,
                 right: 0,
                 child: Column(

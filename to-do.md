@@ -48,5 +48,7 @@ TO-DO
 TO-DO
 - optimize firestore storing
 - make timestamp to be millisecondsfromEpoch to save space - DONE
-- make assignable sections to accounts without unverifying the account first in the account management screen
+- make assignable sections to accounts without unverifying the account first in the account management screen - DONE
+- improve ui for teachers to divide attendance list by date if it is a date range
+- enable deletion of attendance record in the attendance records screen
 

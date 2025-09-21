@@ -7,6 +7,7 @@ import 'package:sjlshs_chronos/features/student_management/models/attendance_rec
 import 'package:isar/isar.dart';
 import 'package:sjlshs_chronos/features/student_management/models/students.dart';
 import 'package:sjlshs_chronos/features/logging/chronos_logger.dart';
+import 'package:sjlshs_chronos/features/device_management/calendar_management.dart';
 
 class RecordManager {
   final FirebaseFirestore? firestore;
@@ -165,6 +166,9 @@ class RecordManager {
       throw Exception('Last sync is in the future');
     }
 
+    // get the day exceptions
+    final dayExceptions = await CalendarManager(firestore: firestore!).getAllDayExceptions();
+
     // for every student in isar, get their lrn
     final students = await isar.students.where().findAll();
     for (var student in students) {
@@ -173,6 +177,7 @@ class RecordManager {
         lrn: student.lrn,
         start: DateTime(lastSync.year, lastSync.month, lastSync.day),
         end: DateTime(now.year, now.month, now.day, 23, 59, 59),
+        dayExceptions: dayExceptions,
       );
       print(absences);
       try {
@@ -400,9 +405,10 @@ class RecordManager {
     required String lrn,
     required DateTime start,
     required DateTime end,
+    required List<Map<String, dynamic>> dayExceptions,
   }) async {
     try {
-      final validDays = getWeekdaysBetween(start, end);
+      final validDays = getWeekdaysBetween(start, end, dayExceptions);
       final presentDays = await getPresentDays(
         lrn: lrn,
         start: start,
@@ -416,7 +422,7 @@ class RecordManager {
     }
   }
 
-  List<DateTime> getWeekdaysBetween(DateTime start, DateTime end) {
+  List<DateTime> getWeekdaysBetween(DateTime start, DateTime end, List<Map<String, dynamic>> dayExceptions) {
     final dates = <DateTime>[];
 
     for (
@@ -425,11 +431,23 @@ class RecordManager {
       d = d.add(Duration(days: 1))
     ) {
       // 1 = Monday, 7 = Sunday
-      if (d.weekday >= DateTime.monday && d.weekday <= DateTime.friday) {
+      if (d.weekday >= DateTime.monday && d.weekday <= DateTime.friday && !isDayException(d, dayExceptions)) {
         dates.add(DateTime(d.year, d.month, d.day)); // normalized
       }
     }
 
     return dates;
+  }
+
+  // if a day is in the day exceptions, it is not a valid class day
+  bool isDayException(DateTime day, List<Map<String, dynamic>> dayExceptions) {
+    // normalize the day to midnight
+    final normalizedDay = DateTime(day.year, day.month, day.day);
+    for (var exception in dayExceptions) {
+      if (exception['date'] == normalizedDay.millisecondsSinceEpoch) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -136,6 +136,16 @@ class AppDrawer extends ConsumerWidget {
                 context.push('/device-configuration');
               },
             ),
+            _buildListTile(
+              context: context,
+              icon: Icons.calendar_today,
+              title: 'Calendar Management',
+              route: '/calendar-management',
+              currentRoute: currentRoute,
+              onTap: () {
+                context.push('/calendar-management');
+              },
+            ),
           const Divider(),
           _buildListTile(
             context: context,

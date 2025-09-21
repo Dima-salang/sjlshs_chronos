@@ -7,7 +7,9 @@ import 'package:sjlshs_chronos/features/student_management/screens/student_manag
 import 'package:sjlshs_chronos/features/student_management/screens/attendance_records_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/login_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/register_screen.dart';
+import 'package:sjlshs_chronos/features/auth/account_management.dart';
 import 'package:sjlshs_chronos/features/auth/screens/account_verification_screen.dart';
+import 'package:sjlshs_chronos/features/device_management/calendar_management_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/verification_info_screen.dart';
 import 'package:sjlshs_chronos/features/student_management/screens/teacher_attendance_screen.dart';
 import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
@@ -202,6 +204,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/calendar-management',
+        name: 'calendar-management',
+        builder: (context, state) => const CalendarManagementScreen(),
       )
     ],
     errorBuilder: (context, state) => const AppScaffold(

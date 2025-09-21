@@ -274,6 +274,28 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
                   primaryColor: theme.colorScheme.primary,
                 ),
               ),
+              if (_isLateMode)
+                Positioned(
+                  top: 24,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(20.0),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.access_time, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Late Mode Activated',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Positioned(
                 bottom: 24,
                 left: 0,

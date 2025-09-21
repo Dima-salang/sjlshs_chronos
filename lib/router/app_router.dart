@@ -7,16 +7,13 @@ import 'package:sjlshs_chronos/features/student_management/screens/student_manag
 import 'package:sjlshs_chronos/features/student_management/screens/attendance_records_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/login_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/register_screen.dart';
-import 'package:sjlshs_chronos/features/auth/account_management.dart';
 import 'package:sjlshs_chronos/features/auth/screens/account_verification_screen.dart';
 import 'package:sjlshs_chronos/features/device_management/calendar_management_screen.dart';
 import 'package:sjlshs_chronos/features/auth/screens/verification_info_screen.dart';
 import 'package:sjlshs_chronos/features/student_management/screens/teacher_attendance_screen.dart';
-import 'package:sjlshs_chronos/features/attendance_tracking/attendance_tracker.dart';
 import 'package:sjlshs_chronos/main.dart';
 import 'package:sjlshs_chronos/widgets/app_scaffold.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
-import 'package:sjlshs_chronos/features/device_management/key_management.dart';
 import 'package:sjlshs_chronos/features/auth/screens/splash_screen.dart';
 import 'package:sjlshs_chronos/features/device_management/settings.dart';
 
@@ -51,8 +48,6 @@ final routerProvider = Provider<GoRouter>((ref) {
   final user = userAsync.value;
   final userMetadata = userMetadataAsync.value;
   
-  final bool isUserLoggedIn = user != null;
-
   return GoRouter(
     initialLocation: '/splash',
     redirect: (context, state) {
@@ -68,11 +63,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthRoute = state.uri.path == '/login' || state.uri.path == '/register' || state.uri.path == '/pin-entry';
       final isVerificationScreen = state.uri.path == '/verification-screen';
       final isError = userAsync.hasError || isarAsync.hasError;
-
-      print("Current state: ${state.uri.path}");
-      print("Is offline: $isOffline");
-      print("Extra: ${state.extra}");
-
 
       if (isOffline) {
         return null;

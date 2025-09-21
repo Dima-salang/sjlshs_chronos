@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
-import 'package:sjlshs_chronos/features/auth/user_metadata.dart' as user_metadata;
 
 class VerificationInfoScreen extends ConsumerWidget {
   const VerificationInfoScreen({super.key});

@@ -49,6 +49,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
   SortOption _sortOption = SortOption.nameAsc;
   bool _isGeneratingReport = false;
   String? _section;
+  bool _showOnlyLate = false;
   
   // Date formatters
   static final _dateFormat = DateFormat('MMM d, yyyy');
@@ -122,11 +123,20 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
 
       final dateRange = _createDateRange();
       
-      final records = await _recordManager.getAbsencesFromFirestore(
-        section: section,
-        start: dateRange.start,
-        end: dateRange.end,
-      );
+      final List<Map<String, dynamic>> records;
+      if (_showOnlyLate) {
+        records = await _recordManager.getLateRecordsFromFirestore(
+          section: section,
+          start: dateRange.start,
+          end: dateRange.end,
+        );
+      } else {
+        records = await _recordManager.getAbsencesFromFirestore(
+          section: section,
+          start: dateRange.start,
+          end: dateRange.end,
+        );
+      }
 
       if (!mounted) return;
 
@@ -230,7 +240,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
   }
 
   Future<void> _showCustomDatePicker() async {
-    final result = await showDialog<({DateTime start, DateTime end})?>( 
+    final result = await showDialog<({DateTime start, DateTime end})?>(
       context: context,
       builder: (context) => _CustomDateRangeDialog(
         initialStartDate: _startDate,
@@ -411,6 +421,15 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
       padding: const EdgeInsets.all(16),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          if (_showOnlyLate) {
+            return _StatCard(
+              title: 'Late',
+              value: _records.length.toString(),
+              subtitle: 'Students',
+              color: Colors.orange,
+              icon: Icons.watch_later_outlined,
+            );
+          }
           // Single card layout for absent students only
           return _StatCard(
             title: 'Absent',
@@ -549,6 +568,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
                 // Stack vertically on small screens
                 return Column(
                   children: [
+                    _buildShowLateToggle(),
                     const SizedBox(height: 8),
                     _buildSortDropdown(),
                   ],
@@ -557,6 +577,7 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
                 // Side by side on larger screens
                 return Row(
                   children: [
+                    Expanded(child: _buildShowLateToggle()),
                     const SizedBox(width: 12),
                     Flexible(child: _buildSortDropdown()),
                   ],
@@ -595,6 +616,21 @@ class TeacherAttendanceScreenState extends ConsumerState<TeacherAttendanceScreen
     );
   }
 
+  Widget _buildShowLateToggle() {
+    return SwitchListTile(
+      title: const Text('Only late records'),
+      value: _showOnlyLate,
+      onChanged: (value) {
+        setState(() {
+          _showOnlyLate = value;
+          _invalidateFilterCache();
+          _loadAttendance();
+        });
+      },
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
 
   Widget _buildSortDropdown() {
     return DropdownButtonFormField<SortOption>(
@@ -867,8 +903,26 @@ class _StudentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPresent = record['isAbsent'] == false;
-    final statusColor = isPresent ? Colors.green : Colors.red;
+    final isAbsent = record['isAbsent'] == true;
+    final isLate = record['isLate'] == true;
+
+    final String statusText;
+    final Color statusColor;
+    final IconData statusIcon;
+
+    if (isAbsent) {
+      statusText = 'Absent';
+      statusColor = Colors.red;
+      statusIcon = Icons.cancel;
+    } else if (isLate) {
+      statusText = 'Late';
+      statusColor = Colors.orange;
+      statusIcon = Icons.watch_later_outlined;
+    } else {
+      statusText = 'Present';
+      statusColor = Colors.green;
+      statusIcon = Icons.check_circle;
+    }
     
     return Card(
       elevation: 2,
@@ -932,13 +986,13 @@ class _StudentCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isPresent ? Icons.check_circle : Icons.cancel,
+                      statusIcon,
                       color: statusColor,
                       size: 14,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isPresent ? 'Present' : 'Absent',
+                      statusText,
                       style: TextStyle(
                         color: statusColor,
                         fontWeight: FontWeight.w600,
@@ -963,6 +1017,23 @@ class _StudentDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAbsent = record['isAbsent'] == true;
+    final isLate = record['isLate'] == true;
+
+    final String statusText;
+    final Color statusColor;
+
+    if (isAbsent) {
+      statusText = 'Absent';
+      statusColor = Colors.red;
+    } else if (isLate) {
+      statusText = 'Late';
+      statusColor = Colors.orange;
+    } else {
+      statusText = 'Present';
+      statusColor = Colors.green;
+    }
+
     return Container(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1003,9 +1074,9 @@ class _StudentDetailsSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  record['isAbsent'] ? 'Absent' : 'Present',
+                  statusText,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: record['isAbsent'] ? Colors.red : Colors.green,
+                    color: statusColor,
                     fontWeight: FontWeight.w600,
                   ),
                   overflow: TextOverflow.ellipsis,

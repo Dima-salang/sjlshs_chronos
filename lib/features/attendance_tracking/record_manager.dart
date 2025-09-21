@@ -108,6 +108,7 @@ class RecordManager {
           'studentSection': record.studentSection,
           'timestamp': record.timestamp.millisecondsSinceEpoch,
           'isAbsent': false,
+          'isLate': record.isLate,
         };
         batch?.set(docRef!, data, SetOptions(merge: true));
       }
@@ -136,6 +137,7 @@ class RecordManager {
           'studentSection': student.studentSection,
           'timestamp': absence.millisecondsSinceEpoch,
           'isAbsent': true,
+          'isLate': false,
         };
         batch?.set(docRef!, data, SetOptions(merge: true));
       }
@@ -256,7 +258,6 @@ class RecordManager {
     required DateTime end,
   }) async {
     try {
-      print(section);
       var query = firestore
           ?.collection('attendance')
           .where(
@@ -315,6 +316,51 @@ class RecordManager {
 
 
   // LATE RECORD FUNCTIONS
+
+  // get late records for teacher
+  Future<List<Map<String, dynamic>>> getLateRecordsFromFirestore({
+    String? section,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    try {
+      var query = firestore
+          ?.collection('attendance')
+          .where(
+            'timestamp',
+            isGreaterThanOrEqualTo: start,
+            isLessThanOrEqualTo: end,
+          )
+          .where('isLate', isEqualTo: true);
+
+      // Only add the section filter if it's not null
+      if (section != null) {
+        query = query?.where('studentSection', isEqualTo: section);
+      }
+
+      // Add the order by
+      query = query?.orderBy('timestamp', descending: true);
+
+      final lateRecordsResult = await query?.get();
+
+      // ensure that late records are unique per student per day
+      final uniqueLateRecords = <String, Map<String, dynamic>>{};
+      for (final record in lateRecordsResult?.docs ?? []) {
+        final lrn = record.data()['lrn'];
+        final date = record.data()['timestamp'].toDate();
+        final key = '${lrn}_${date.toIso8601String().substring(0, 10)}';
+        if (!uniqueLateRecords.containsKey(key)) {
+          uniqueLateRecords[key] = record.data();
+        }
+      }
+
+      return uniqueLateRecords.values.toList();
+    } catch (e) {
+      logger.e('Error getting late records from Firestore: $e');
+      throw Exception('Error getting late records from Firestore: $e');
+    }
+  }
+
 
 
 

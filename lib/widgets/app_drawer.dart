@@ -15,6 +15,7 @@ class AppDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentRoute = GoRouterState.of(context).matchedLocation;
     final isOffline = ref.watch(isOfflineProvider);
+    final isLateMode = ref.watch(isLateModeProvider);
     print("isOffline in app drawer: $isOffline");
 
     return Drawer(
@@ -49,18 +50,30 @@ class AppDrawer extends ConsumerWidget {
             ),
           ),
 
+          _buildListTile(
+            context: context,
+            icon: Icons.qr_code_scanner,
+            title: 'QR Scanner',
+            route: '/scanner',
+            currentRoute: currentRoute,
+            onTap: () {
+              context.push('/scanner');
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Late Mode'),
+            subtitle: const Text('Mark student as late'),
+            value: isLateMode,
+            onChanged: (bool value) {
+              ref.read(isLateModeProvider.notifier).state = value;
+            },
+            secondary: const Icon(Icons.access_time),
+            activeColor: Theme.of(context).colorScheme.error,
+          ),
+          const Divider(),
+
           // Only show these items when online
           if (!isOffline) ...[
-            _buildListTile(
-              context: context,
-              icon: Icons.qr_code_scanner,
-              title: 'QR Scanner',
-              route: '/scanner',
-              currentRoute: currentRoute,
-              onTap: () {
-                context.push('/scanner');
-              },
-            ),
             _buildListTile(
               context: context,
               icon: Icons.people,
@@ -146,16 +159,6 @@ class AppDrawer extends ConsumerWidget {
             },
           ),
           ] else ...[
-            _buildListTile(
-              context: context,
-              icon: Icons.qr_code_scanner,
-              title: 'QR Scanner',
-              route: '/scanner',
-              currentRoute: currentRoute,
-              onTap: () {
-                context.push('/scanner');
-              },
-            ),
             // redirect to login
             _buildListTile(
               context: context,
@@ -168,8 +171,6 @@ class AppDrawer extends ConsumerWidget {
               },
             ),
           ],
-
-          // Show these items in both modes
         ],
       ),
     );

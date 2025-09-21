@@ -9,6 +9,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:convert';
 import 'package:pointycastle/export.dart' as pointycastle;
 import 'package:sjlshs_chronos/features/auth/auth_providers.dart';
+import 'package:sjlshs_chronos/features/auth/offline_auth_provider.dart';
 import 'package:sjlshs_chronos/utils/encryption_utils.dart';
 import 'package:sjlshs_chronos/features/student_management/models/attendance_record.dart';
 import 'package:isar/isar.dart';
@@ -55,6 +56,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
   bool _isProcessingScan = false;
 
   late final Isar? isar;
+  late final bool _isLateMode;
 
   @override
   void initState() {
@@ -70,11 +72,12 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     super.didChangeDependencies();
     isar = ref.watch(isarProvider).value;
     recordManager = RecordManager(firestore: FirebaseFirestore.instance, isar: isar!);
+    _isLateMode = ref.watch(isLateModeProvider);
   }
 
   void _initializeController() {
     _controller = MobileScannerController(
-      detectionTimeoutMs: 1500,
+      detectionTimeoutMs: 1000,
       formats: [BarcodeFormat.qrCode],
       facing: CameraFacing.back,
       torchEnabled: false,
@@ -127,7 +130,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     if (_isProcessingScan || _scanState != ScanState.scanning || capture.barcodes.isEmpty) return;
 
     final barcode = capture.barcodes.first;
-    final scannedData = barcode.rawValue;
+    final scannedData = barcode.rawBytes;
 
     if (scannedData == null || scannedData.isEmpty) return;
 
@@ -141,8 +144,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
 
     try {
       final timestamp = DateTime.now();
-      final scannedDataMap = await _decryptData(scannedData);
-      final lrn = scannedDataMap['student_id'];
+      final lrn = await _decryptData(scannedData);
 
       final student = await isar!.students.filter().lrnEqualTo(lrn).findFirst();
 
@@ -160,6 +162,7 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
         studentSection: student.studentSection,
         timestamp: timestamp,
         isPresent: true,
+        isLate: _isLateMode,
       );
 
       await recordManager.addRecordToIsar(record);
@@ -203,9 +206,8 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     }
   }
 
-  Future<Map<String, dynamic>> _decryptData(String encryptedData) async {
+  Future<String> _decryptData(Uint8List encryptedBytes) async {
     try {
-      final encryptedBytes = base64Decode(encryptedData);
       final nonce = encryptedBytes.sublist(0, 12);
       final tag = encryptedBytes.sublist(12, 28);
       final ciphertext = encryptedBytes.sublist(28);
@@ -215,8 +217,8 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
         ..setAll(0, ciphertext)
         ..setAll(ciphertext.length, tag);
       final decrypted = cipher.process(paddedCiphertext);
-      final jsonString = utf8.decode(decrypted);
-      return jsonDecode(jsonString);
+      final decryptedString = utf8.decode(decrypted);
+      return decryptedString;
     } catch (e) {
       throw Exception('Decryption failed: $e');
     }

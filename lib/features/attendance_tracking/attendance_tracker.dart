@@ -144,7 +144,8 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
 
     try {
       final timestamp = DateTime.now();
-      final lrn = await _decryptData(scannedData);
+      // final lrn = await _decryptData(scannedData);
+      final lrn = String.fromCharCodes(scannedData);
 
       final student = await isar!.students.filter().lrnEqualTo(lrn).findFirst();
 
@@ -206,23 +207,23 @@ class _QRScannerState extends ConsumerState<QRScanner> with TickerProviderStateM
     }
   }
 
-  Future<String> _decryptData(Uint8List encryptedBytes) async {
-    try {
-      final nonce = encryptedBytes.sublist(0, 12);
-      final tag = encryptedBytes.sublist(12, 28);
-      final ciphertext = encryptedBytes.sublist(28);
-      final cipher = pointycastle.GCMBlockCipher(pointycastle.AESEngine())
-        ..init(false, pointycastle.AEADParameters(pointycastle.KeyParameter(key!), 128, nonce, Uint8List(0)));
-      final paddedCiphertext = Uint8List(ciphertext.length + tag.length)
-        ..setAll(0, ciphertext)
-        ..setAll(ciphertext.length, tag);
-      final decrypted = cipher.process(paddedCiphertext);
-      final decryptedString = utf8.decode(decrypted);
-      return decryptedString;
-    } catch (e) {
-      throw Exception('Decryption failed: $e');
-    }
-  }
+  // Future<String> _decryptData(Uint8List encryptedBytes) async {
+  //   try {
+  //     final nonce = encryptedBytes.sublist(0, 12);
+  //     final tag = encryptedBytes.sublist(12, 28);
+  //     final ciphertext = encryptedBytes.sublist(28);
+  //     final cipher = pointycastle.GCMBlockCipher(pointycastle.AESEngine())
+  //       ..init(false, pointycastle.AEADParameters(pointycastle.KeyParameter(key!), 128, nonce, Uint8List(0)));
+  //     final paddedCiphertext = Uint8List(ciphertext.length + tag.length)
+  //       ..setAll(0, ciphertext)
+  //       ..setAll(ciphertext.length, tag);
+  //     final decrypted = cipher.process(paddedCiphertext);
+  //     final decryptedString = utf8.decode(decrypted);
+  //     return decryptedString;
+  //   } catch (e) {
+  //     throw Exception('Decryption failed: $e');
+  //   }
+  // }
 
   @override
   void dispose() {

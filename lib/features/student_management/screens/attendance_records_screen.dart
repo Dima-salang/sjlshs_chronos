@@ -27,7 +27,8 @@ class AttendanceRecordsScreen extends ConsumerStatefulWidget {
       _AttendanceRecordsScreenState();
 }
 
-class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScreen> {
+class _AttendanceRecordsScreenState
+    extends ConsumerState<AttendanceRecordsScreen> {
   DateTime _selectedDate = DateTime.now();
   List<AttendanceRecord> _records = [];
   bool _isLoading = false;
@@ -54,7 +55,7 @@ class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScree
       firestore: FirebaseFirestore.instance,
       isar: widget.isar,
     );
-    
+
     _loadRecords();
     _fetchUserRole();
   }
@@ -479,7 +480,9 @@ class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScree
                           backgroundColor:
                               Theme.of(context).colorScheme.secondaryContainer,
                           foregroundColor:
-                              Theme.of(context).colorScheme.onSecondaryContainer,
+                              Theme.of(
+                                context,
+                              ).colorScheme.onSecondaryContainer,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8.0),
                           ),
@@ -591,57 +594,84 @@ class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScree
           }
         }
 
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          shape: RoundedRectangleBorder(
-            side:
-                isThisDevice
-                    ? BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 1.5,
-                    )
-                    : BorderSide(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12.0),
-          ),
-          child: ListTile(
-            onTap: () => _showDeviceDetailsDialog(device),
-            isThreeLine: true,
-            leading: Icon(
-              isThisDevice ? Icons.phone_android : Icons.device_unknown,
-              color:
+        return InkWell(
+          onLongPress: () {
+            // Only allow deletion if user is admin and it's not the current device
+            if (_userRole == 'admin' && !isThisDevice) {
+              _showDeleteDeviceDialog(device);
+            } else if (isThisDevice) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Cannot delete the current device'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          },
+          child: Card(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            shape: RoundedRectangleBorder(
+              side:
                   isThisDevice
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade600,
+                      ? BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 1.5,
+                      )
+                      : BorderSide(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12.0),
             ),
-            title: Text(
-              '${device['name'] ?? device['deviceId']} ${isThisDevice ? '(This Device)' : ''}',
-              style: TextStyle(
-                fontWeight: isThisDevice ? FontWeight.bold : FontWeight.normal,
+            child: ListTile(
+              isThreeLine: true,
+              leading: Icon(
+                isThisDevice ? Icons.phone_android : Icons.device_unknown,
+                color:
+                    isThisDevice
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey.shade600,
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'ID: ${device['deviceId']}',
-                  overflow: TextOverflow.ellipsis,
+              title: Text(
+                '${device['name'] ?? device['deviceId']} ${isThisDevice ? '(This Device)' : ''}',
+                style: TextStyle(
+                  fontWeight:
+                      isThisDevice ? FontWeight.bold : FontWeight.normal,
                 ),
-                Text(
-                  lastSync != null
-                      ? 'Synced: ${DateFormat('MMM d, hh:mm a').format(lastSync)}'
-                      : 'Never synced',
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'ID: ${device['deviceId']}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    lastSync != null
+                        ? 'Synced: ${DateFormat('MMM d, hh:mm a').format(lastSync)}'
+                        : 'Never synced',
+                  ),
+                  if (_userRole == 'admin' && !isThisDevice)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(
+                        'Long press to delete',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              trailing: Chip(
+                avatar: Icon(Icons.circle, color: statusColor, size: 12),
+                label: Text(lastSyncString),
+                backgroundColor: statusColor.withOpacity(0.1),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(color: statusColor.withOpacity(0.2)),
                 ),
-              ],
-            ),
-            trailing: Chip(
-              avatar: Icon(Icons.circle, color: statusColor, size: 12),
-              label: Text(lastSyncString),
-              backgroundColor: statusColor.withOpacity(0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: statusColor.withOpacity(0.2)),
               ),
             ),
           ),
@@ -889,6 +919,122 @@ class _AttendanceRecordsScreenState extends ConsumerState<AttendanceRecordsScree
             ],
           ),
     );
+  }
+
+  void _showDeleteDeviceDialog(Map<String, dynamic> device) {
+    final deviceName = device['name'] as String? ?? device['deviceId'];
+    final deviceId = device['deviceId'] as String;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange),
+                SizedBox(width: 10),
+                Text('Delete Device'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Are you sure you want to delete this device?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text('Device: $deviceName'),
+                const SizedBox(height: 4),
+                Text(
+                  'ID: $deviceId',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 20, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This action cannot be undone. The device will be removed from the sync status list.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  context.pop();
+                  _deleteDevice(deviceId, deviceName);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _deleteDevice(String deviceId, String deviceName) async {
+    try {
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleting device: $deviceName...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Delete the device from Firestore
+      await DeviceManagement.deleteDevice(deviceId);
+
+      // Refresh the sync status list
+      await _loadSyncStatus();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Device "$deviceName" deleted successfully'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error deleting device: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete device: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildDetailRow(String label, String value) {

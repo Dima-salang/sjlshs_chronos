@@ -1,54 +1,24 @@
-TO-DO
-Late for admission slip
-- scanning for late
-- scanning for attendance
-- admission slip
-- teacher scanning
-- possible irregular
-- admin dashboard / per teacher / per admin
-- 3 lates - verbal warning
-- absent streak
-- holidays and no classes
-- possible malicious duplication
-- lrn, student name, grade level, section, adviser
-- encryption for qr
+First, ensure to read the system prompt at gemini.md. strictly follow the system prompt.
+
+now, these are the things you need to do. 
+
+1. comment out the usage of encryption in scanning for the qr codes.
+- ensure that it is commented out so that i can revert back to it.
+- the new one just uses the plaintext lrn from the qr code. it is not json. it just plaintext.
+
+2. also make the importing of the master list automated by importing it from firestore.
+- the master list can be found in the collection master_list and has the same structure.
+- ensure that at the tap of a button, the device can import everything and that they are notified and shown a progress bar. 
+
+3. also make the importing of the student photos automated as well using google drive api.
+- the student photos can be found in a specific public folder in google drive.
+- ensure that at the tap of a button, the device can import everything and that they are notified and shown a progress bar.
+- ensure that all files can be downloaded. 
+- i will supply the folder link later on or the folder id and the credentials and the api key to be used for the google drive api.
+
+4. clean up the things that are not needed anymore.
 
 
-TO-DO
-- local storage with Isar - DONE
-- new students update using excel - DONE
-- sync records - DONE
-- UI for scanning - DONE
-- Auth - DONE
-- get images - DONE
-- resolve absences from last sync to current time - DONE
-- resolve presences from online for teachers - DONE
-- report generation - DONE
-- admin dashboard - DONE
-- scanning mode security - DONE
-
-
-TO-DO
-- ensure that only unique absences are recorded per student per day even if multiple present records are present in different tablet.
-- improve ui with sjlshs logo - DONE
-- settings for dark mode and light mode - DONE
-
-
-
-TO-DO
-- Per section for report generation - DONE
-- Male and female inclusion in student import
-- school logo in login - DONE
-- do report generation for admin in python client
-- device naming option for device status - DONE
-- enforce syncing presences for all main tablet today before syncing absences once. enforce error if one of the tablets failed to sync records for the current day. - DONE
-
-
-
-TO-DO
-- optimize firestore storing
-- make timestamp to be millisecondsfromEpoch to save space - DONE
-- make assignable sections to accounts without unverifying the account first in the account management screen - DONE
-- improve ui for teachers to divide attendance list by date if it is a date range
-- enable deletion of attendance record in the attendance records screen
-
+5. ensure that the entire system is coherent and that the flow is seamless.
+- advise me on things that might need improvement or that there are things that are needed or not needed.
+- ensure that the workflows support the user flows.

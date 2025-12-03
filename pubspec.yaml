@@ -59,6 +59,8 @@ dependencies:
   connectivity_plus: ^6.1.4
   flutter_secure_storage: ^9.2.4
   table_calendar: ^3.2.0
+  googleapis: ^15.0.0
+  googleapis_auth: ^2.0.0
 
 dev_dependencies:
   flutter_test:
@@ -89,6 +91,7 @@ flutter:
   assets:
     - assets/encryption_key.key
     - assets/images/
+    - sjlshs-chronos-480102-1a16b0c21ee4.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

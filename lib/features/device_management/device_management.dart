@@ -156,4 +156,22 @@ Future<void> setDeviceName(String name) async {
       .set({'name': name}, SetOptions(merge: true));
 }
 
+/// Deletes a device from Firestore by device ID.
+/// This is typically used by admins to remove devices that are no longer needed
+/// or were accidentally synced.
+/// 
+/// Throws an exception if the device cannot be deleted.
+Future<void> deleteDevice(String deviceId) async {
+  try {
+    await FirebaseFirestore.instance
+        .collection('devices')
+        .doc(deviceId)
+        .delete();
+    debugPrint('Device $deviceId deleted successfully');
+  } catch (e) {
+    debugPrint('Error deleting device $deviceId: $e');
+    rethrow;
+  }
+}
+
 
